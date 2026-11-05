@@ -86,6 +86,9 @@
       },
       "renewable_share_load": {
         "default": "mdi:leaf-circle"
+      },
+      "frequency_data_age": {
+        "default": "mdi:timer-sand"
       }
     },
     "binary_sensor": {

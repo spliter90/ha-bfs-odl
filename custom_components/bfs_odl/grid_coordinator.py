@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -16,15 +16,21 @@ from homeassistant.util.hass_dict import HassKey
 
 from .const import (
     CONF_FREQUENCY_INTERVAL,
+    CONF_FREQUENCY_STALE_AFTER,
     CONF_POSTAL_CODE,
     CONF_POWER_INTERVAL,
     CONF_SIGNAL_INTERVAL,
     DEFAULT_FREQUENCY_INTERVAL,
+    DEFAULT_FREQUENCY_STALE_AFTER,
     DEFAULT_POWER_INTERVAL,
     DEFAULT_SIGNAL_INTERVAL,
     DOMAIN,
+    FREQUENCY_BUFFER,
+    FREQUENCY_INITIAL_LOOKBACK,
     FREQUENCY_WINDOW,
+    MAX_FREQUENCY_STALE_AFTER,
     MIN_FREQUENCY_INTERVAL,
+    MIN_FREQUENCY_STALE_AFTER,
     MIN_POWER_INTERVAL,
     MIN_SIGNAL_INTERVAL,
     POWER_LOOKBACK,
@@ -130,7 +136,12 @@ class SignalCoordinator(GridCoordinator[SignalData]):
 
 
 class FrequencyCoordinator(GridCoordinator[FrequencyData]):
-    """Netzfrequenz, standardmäßig jede Minute; lädt nur neue Sekundenwerte."""
+    """Netzfrequenz, standardmäßig jede Minute; lädt nur neue Sekundenwerte.
+
+    Energy-Charts liefert die Frequenz mit Verzug (rund 50 Minuten). Minimum und
+    Maximum beziehen sich daher auf die letzte Stunde der vorhandenen Daten, also
+    auf die Stunde vor dem neuesten Messwert, nicht auf die Stunde vor "jetzt".
+    """
 
     source = "frequency"
 
@@ -145,20 +156,59 @@ class FrequencyCoordinator(GridCoordinator[FrequencyData]):
             MIN_FREQUENCY_INTERVAL,
         )
         super().__init__(hass, entry, api, timedelta(seconds=seconds))
+        minutes = min(
+            MAX_FREQUENCY_STALE_AFTER,
+            _option(
+                entry,
+                CONF_FREQUENCY_STALE_AFTER,
+                DEFAULT_FREQUENCY_STALE_AFTER,
+                MIN_FREQUENCY_STALE_AFTER,
+            ),
+        )
+        self.stale_after = timedelta(minutes=minutes)
         self._buffer: deque[tuple[int, float]] = deque()
         self.last_request_points = 0
+        self.last_request_start: datetime | None = None
+        self.last_fetch_error: str | None = None
+
+    @property
+    def initial_lookback(self) -> timedelta:
+        """Zeitraum für den ersten Abruf.
+
+        Mindestens 3 Stunden, und so weit, dass auch bei einem Verzug bis zur
+        Stale-Grenze noch eine volle Stunde Daten im Fenster liegt.
+        """
+        return max(FREQUENCY_INITIAL_LOOKBACK, self.stale_after + FREQUENCY_WINDOW)
+
+    def is_stale(self, data: FrequencyData) -> bool:
+        """Ist der neueste Messwert älter als die Stale-Grenze?"""
+        return dt_util.utcnow() - data.time > self.stale_after
 
     async def _async_fetch(self) -> FrequencyData:
         now = dt_util.utcnow()
-        window_start = int((now - FREQUENCY_WINDOW).timestamp())
-        start = window_start
         if self._buffer:
-            start = max(window_start, self._buffer[-1][0] + 1)
+            # Nur neue Werte seit dem letzten Abruf
+            start = dt_util.utc_from_timestamp(self._buffer[-1][0] + 1)
+        else:
+            # Erster Abruf bzw. nach einem Neustart
+            start = now - self.initial_lookback
 
-        if start < int(now.timestamp()):
-            points = await self.api.async_get_frequency(
-                dt_util.utc_from_timestamp(start), now
-            )
+        if start < now:
+            self.last_request_start = start
+            try:
+                points = await self.api.async_get_frequency(start, now)
+            except EnergyChartsError as err:
+                if not self._buffer:
+                    raise
+                # Mit den gepufferten Werten weitermachen: Die Entitäten werden erst
+                # unavailable, wenn die Daten älter als die Stale-Grenze sind. Ohne
+                # diesen Weg würden wiederholte Fehlschläge die Entitäten gar nicht
+                # mehr aktualisieren.
+                _LOGGER.debug("Frequenz-Abruf fehlgeschlagen: %s", err)
+                self.last_fetch_error = str(err)
+                points = []
+            else:
+                self.last_fetch_error = None
             self.last_request_points = len(points)
             last = self._buffer[-1][0] if self._buffer else -1
             for timestamp, value in sorted(points):
@@ -166,23 +216,33 @@ class FrequencyCoordinator(GridCoordinator[FrequencyData]):
                     self._buffer.append((timestamp, value))
                     last = timestamp
 
-        while self._buffer and self._buffer[0][0] < window_start:
-            self._buffer.popleft()
         if not self._buffer:
-            raise EnergyChartsNoDataError("Keine Frequenzwerte in der letzten Stunde")
+            raise EnergyChartsNoDataError("Keine Frequenzwerte im abgerufenen Zeitraum")
 
-        values = [value for _, value in self._buffer]
         latest_time, latest_value = self._buffer[-1]
+        buffer_start = latest_time - int(FREQUENCY_BUFFER.total_seconds())
+        while self._buffer and self._buffer[0][0] < buffer_start:
+            self._buffer.popleft()
+
+        window_start = latest_time - int(FREQUENCY_WINDOW.total_seconds())
+        window = [
+            value for timestamp, value in self._buffer if timestamp >= window_start
+        ]
+        first_in_window = next(t for t, _ in self._buffer if t >= window_start)
         return FrequencyData(
             time=dt_util.utc_from_timestamp(latest_time),
             frequency=latest_value,
-            minimum=min(values),
-            maximum=max(values),
-            count=len(values),
+            minimum=min(window),
+            maximum=max(window),
+            count=len(window),
+            window_start=dt_util.utc_from_timestamp(first_in_window),
         )
 
     def diagnostics(self) -> dict[str, Any]:
-        """Füllstand des Puffers."""
+        """Füllstand des Puffers, Datenalter und Stale-Grenze."""
+        latest = (
+            dt_util.utc_from_timestamp(self._buffer[-1][0]) if self._buffer else None
+        )
         return {
             "buffer_size": len(self._buffer),
             "buffer_start": (
@@ -190,7 +250,19 @@ class FrequencyCoordinator(GridCoordinator[FrequencyData]):
                 if self._buffer
                 else None
             ),
+            "buffer_end": latest.isoformat() if latest else None,
+            "data_age_minutes": (
+                round((dt_util.utcnow() - latest).total_seconds() / 60, 1)
+                if latest
+                else None
+            ),
+            "stale_after_minutes": self.stale_after.total_seconds() / 60,
+            "initial_lookback_hours": self.initial_lookback.total_seconds() / 3600,
+            "last_request_start": (
+                self.last_request_start.isoformat() if self.last_request_start else None
+            ),
             "last_request_points": self.last_request_points,
+            "last_fetch_error": self.last_fetch_error,
         }
 
 

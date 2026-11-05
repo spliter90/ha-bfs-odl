@@ -29,7 +29,7 @@
         "data_description": {
           "postal_code": "5-stellige Postleitzahl, z. B. 61273.",
           "enable_signal": "Anteil Erneuerbare und Ampel je Viertelstunde, Prognose und nächstes grünes Zeitfenster.",
-          "enable_frequency": "Frequenz, gemessen vom Fraunhofer ISE in Freiburg (europäisches Verbundnetz).",
+          "enable_frequency": "Frequenz, gemessen vom Fraunhofer ISE in Freiburg (europäisches Verbundnetz). Minimum und Maximum beziehen sich auf die letzte Stunde der verfügbaren Daten.",
           "enable_power": "Last, Residuallast und Erzeugung nach Energieträgern für Deutschland."
         }
       },
@@ -99,17 +99,19 @@
           "signal_interval": "Abrufintervall Netzampel",
           "frequency_interval": "Abrufintervall Frequenz",
           "power_interval": "Abrufintervall Erzeugung",
-          "frequency_threshold": "Grenze Frequenzabweichung"
+          "frequency_threshold": "Grenze Frequenzabweichung",
+          "frequency_stale_after": "Frequenzdaten gültig für"
         },
         "data_description": {
           "postal_code": "5-stellige Postleitzahl, z. B. 61273.",
           "enable_signal": "Anteil Erneuerbare und Ampel je Viertelstunde, Prognose und nächstes grünes Zeitfenster.",
-          "enable_frequency": "Frequenz, gemessen vom Fraunhofer ISE in Freiburg (europäisches Verbundnetz).",
+          "enable_frequency": "Frequenz, gemessen vom Fraunhofer ISE in Freiburg (europäisches Verbundnetz). Minimum und Maximum beziehen sich auf die letzte Stunde der verfügbaren Daten.",
           "enable_power": "Last, Residuallast und Erzeugung nach Energieträgern für Deutschland.",
           "signal_interval": "Mindestens 5 Minuten. Die Werte wechseln jede Viertelstunde.",
           "frequency_interval": "Mindestens 30 Sekunden. Es werden nur die neuen Werte seit dem letzten Abruf geladen.",
           "power_interval": "Mindestens 5 Minuten. Energy-Charts veröffentlicht Viertelstundenwerte, oft mit Verzug.",
-          "frequency_threshold": "Der Binärsensor schaltet ein, wenn die Frequenz um mehr als diesen Wert von 50 Hz abweicht."
+          "frequency_threshold": "Der Binärsensor schaltet ein, wenn die Frequenz um mehr als diesen Wert von 50 Hz abweicht.",
+          "frequency_stale_after": "30 Minuten bis 12 Stunden. Energy-Charts veröffentlicht die Netzfrequenz mit rund 50 Minuten Verzug; ältere Daten machen die Frequenz-Entitäten nicht verfügbar."
         }
       }
     },
@@ -214,7 +216,10 @@
         "name": "Netzfrequenz",
         "state_attributes": {
           "measured_at": {
-            "name": "Gemessen um"
+            "name": "Letzter Messwert"
+          },
+          "data_age_minutes": {
+            "name": "Datenalter (Minuten)"
           },
           "samples_1h": {
             "name": "Messwerte (1 h)"
@@ -225,10 +230,52 @@
         "name": "Frequenzabweichung"
       },
       "frequency_minimum": {
-        "name": "Frequenz Minimum (1 h)"
+        "name": "Frequenz Minimum (1 h)",
+        "state_attributes": {
+          "window_start": {
+            "name": "Beginn Zeitraum"
+          },
+          "window_end": {
+            "name": "Ende Zeitraum (letzter Messwert)"
+          },
+          "window_basis": {
+            "name": "Bezug",
+            "state": {
+              "latest_data": "Letzte Stunde der verfügbaren Daten"
+            }
+          },
+          "samples_1h": {
+            "name": "Messwerte (1 h)"
+          }
+        }
       },
       "frequency_maximum": {
-        "name": "Frequenz Maximum (1 h)"
+        "name": "Frequenz Maximum (1 h)",
+        "state_attributes": {
+          "window_start": {
+            "name": "Beginn Zeitraum"
+          },
+          "window_end": {
+            "name": "Ende Zeitraum (letzter Messwert)"
+          },
+          "window_basis": {
+            "name": "Bezug",
+            "state": {
+              "latest_data": "Letzte Stunde der verfügbaren Daten"
+            }
+          },
+          "samples_1h": {
+            "name": "Messwerte (1 h)"
+          }
+        }
+      },
+      "frequency_data_age": {
+        "name": "Frequenz Datenalter",
+        "state_attributes": {
+          "measured_at": {
+            "name": "Letzter Messwert"
+          }
+        }
       },
       "power_load": {
         "name": "Netzlast"
@@ -261,7 +308,12 @@
         "name": "Erdgas"
       },
       "power_cross_border": {
-        "name": "Import-Export-Saldo"
+        "name": "Import-Export-Saldo",
+        "state_attributes": {
+          "direction": {
+            "name": "Richtung"
+          }
+        }
       },
       "renewable_share_load": {
         "name": "Anteil Erneuerbare an der Last"
@@ -314,6 +366,9 @@
           },
           "deviation_mhz": {
             "name": "Abweichung (mHz)"
+          },
+          "measured_at": {
+            "name": "Letzter Messwert"
           }
         }
       }

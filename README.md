@@ -68,12 +68,20 @@ Bedeutung der Signalwerte laut Energy-Charts: `2` = Grün (hoher Anteil Erneuerb
 
 | Entität | Beschreibung |
 |---|---|
-| Netzfrequenz | Letzter Sekundenwert in Hz, 3 Nachkommastellen |
+| Netzfrequenz | Neuester verfügbarer Sekundenwert in Hz, 3 Nachkommastellen. Attribute `measured_at` (Zeitpunkt des Messwerts) und `data_age_minutes` |
 | Frequenzabweichung | Abweichung von 50 Hz in mHz |
-| Frequenz Minimum (1 h) / Frequenz Maximum (1 h) | Extremwerte der letzten Stunde |
+| Frequenz Minimum (1 h) / Frequenz Maximum (1 h) | Extremwerte der **letzten Stunde der verfügbaren Daten**, also der Stunde vor dem neuesten Messwert. Attribute `window_start`, `window_end` und `window_basis: latest_data` |
+| Frequenz Datenalter | Minuten seit dem neuesten Messwert (Diagnose). Bleibt auch bei veralteten Daten sichtbar |
 | Netzfrequenz auffällig | Binärsensor, an bei mehr als ±100 mHz Abweichung (einstellbar) |
 
-Gemessen wird die Frequenz vom Fraunhofer ISE in Freiburg. Die API-Doku nennt nur diese eine Messstelle für das europäische Verbundnetz, daher gibt es keine Regionsauswahl. Abgefragt wird jede Minute, und zwar nur die Sekundenwerte seit dem letzten Abruf; die letzte Stunde hält die Integration im Speicher. Ist der neueste Wert älter als 15 Minuten, werden die Frequenz-Entitäten „nicht verfügbar“.
+Gemessen wird die Frequenz vom Fraunhofer ISE in Freiburg. Die API-Doku nennt nur diese eine Messstelle für das europäische Verbundnetz, daher gibt es keine Regionsauswahl.
+
+**Energy-Charts liefert die Frequenz mit rund 50 Minuten Verzug aus.** Die Werte sind also keine Live-Anzeige, sondern zeigen den Stand von vor etwa einer Stunde; das Datenalter zeigt, wie groß der Verzug gerade ist. So arbeitet die Integration damit:
+
+- Beim ersten Abruf und nach jedem Neustart lädt sie die letzten 4 Stunden (mindestens 3 Stunden, bei längerer Stale-Grenze entsprechend mehr). Danach fragt sie jede Minute nur die neuen Sekundenwerte ab.
+- Im Speicher bleiben die 3 Stunden vor dem neuesten Messwert.
+- Minimum und Maximum beziehen sich auf die Stunde vor dem neuesten Messwert, nicht auf die Stunde vor „jetzt“.
+- Ein einzelner fehlgeschlagener Abruf macht die Entitäten nicht unavailable. Unavailable werden sie erst, wenn der neueste Messwert älter als die **Stale-Grenze** ist (Standard 3 Stunden, einstellbar von 30 Minuten bis 12 Stunden).
 
 ### Last und Erzeugung
 
@@ -82,14 +90,15 @@ Sensoren in GW: Netzlast, Residuallast, Wind an Land, Wind auf See, Solar, Bioma
 - Quelle ist `/total_power` (inklusive Eigenversorgung der Industrie). Liefert der Endpunkt nichts Brauchbares, nutzt die Integration `/public_power` (öffentliches Netz) und merkt sich das.
 - Die neuesten Viertelstunden sind bei Energy-Charts oft noch leer. Jeder Sensor zeigt deshalb den letzten vorhandenen Wert; das Attribut `data_time` sagt, für welche Viertelstunde er gilt. `production_types` nennt die verwendeten Energy-Charts-Reihen.
 - Den Anteil Erneuerbarer an der Last übernimmt die Integration direkt, wenn Energy-Charts ihn mitliefert. Sonst berechnet sie ihn aus Wind, Solar, Biomasse, Wasserkraft und Geothermie geteilt durch die Last.
-- Das Vorzeichen des Import-Export-Saldos übernimmt die Integration unverändert von Energy-Charts. Gleiche es einmal mit dem Diagramm auf energy-charts.info ab, bevor du Automationen darauf baust.
+- **Import-Export-Saldo: positiv = Export, negativ = Import.** Energy-Charts zählt umgekehrt: Laut API-Doku zum grenzüberschreitenden Stromhandel bedeuten dort positive Werte Import und negative Export. Die Integration dreht das Vorzeichen deshalb um. Das Attribut `direction` sagt zusätzlich „Import“ oder „Export“.
 
 Alle Messwerte haben `state_class: measurement` und landen in den Langzeitstatistiken. Frequenz und Leistungen haben die Geräteklassen `frequency` bzw. `power`. Prozentwerte und die Abweichung in mHz haben keine Geräteklasse, weil Home Assistant dafür keine passende anbietet (`power_factor` wäre fachlich falsch, `frequency` kennt kein mHz).
 
 ### Wann sind Stromnetz-Entitäten „nicht verfügbar“?
 
 - Energy-Charts ist nicht erreichbar oder liefert Fehler. Betroffen sind nur die Entitäten des jeweiligen Endpunkts; die anderen laufen weiter.
-- Für eine Größe gibt es in den letzten 24 Stunden keinen Wert, oder die Frequenz ist älter als 15 Minuten.
+- Für eine Größe gibt es in den letzten 24 Stunden keinen Wert.
+- Die Frequenz ist älter als die Stale-Grenze (Standard 3 Stunden). Für die Frequenz-Entitäten zählt nur das Datenalter, nicht einzelne fehlgeschlagene Abrufe.
 
 ## Installation über HACS (benutzerdefiniertes Repository)
 
@@ -135,6 +144,7 @@ Den Ordner `custom_components/bfs_odl` nach `config/custom_components/bfs_odl` k
 | Abrufintervall Frequenz | 60 s | 30–3600 s |
 | Abrufintervall Erzeugung | 15 min | 5–240 min |
 | Grenze Frequenzabweichung | 100 mHz | 10–1000 mHz |
+| Frequenzdaten gültig für (Stale-Grenze) | 180 min | 30–720 min |
 
 Nach dem Speichern wird der Eintrag automatisch neu geladen. Schaltest du einen Teil ab, verschwinden dessen Entitäten.
 
@@ -314,7 +324,7 @@ cards:
         orientation: h
 ```
 
-Hinweis: Home Assistant speichert die Werte zum Zeitpunkt des Abrufs. Weil Energy-Charts die neuesten Viertelstunden oft erst mit Verzug füllt, ist die Kurve gegenüber `data_time` um diesen Verzug nach rechts verschoben. Der Import-Export-Saldo fehlt im Stapel absichtlich, weil er negativ werden kann.
+Hinweis: Home Assistant speichert die Werte zum Zeitpunkt des Abrufs. Weil Energy-Charts die neuesten Viertelstunden oft erst mit Verzug füllt, ist die Kurve gegenüber `data_time` um diesen Verzug nach rechts verschoben. Das gilt auch für die Frequenzkurve, die gegenüber `measured_at` rund 50 Minuten nach rechts versetzt ist. Der Import-Export-Saldo fehlt im Stapel absichtlich, weil er negativ werden kann.
 
 ## Automatisierungsbeispiel
 
@@ -335,6 +345,28 @@ actions:
 ```
 
 Die Wartezeit von einer Stunde filtert einzelne Ausreißer. Natürliche Schwankungen entstehen vor allem durch Regen: Er wäscht Zerfallsprodukte des natürlichen Edelgases Radon aus der Luft und kann die Ortsdosisleistung für einige Stunden deutlich erhöhen, teils auf das Doppelte. Mit dem Standard von 50 % über dem Mittel schaltet der Binärsensor bei starkem Regen deshalb gelegentlich ein. Wer das nicht möchte, erhöht den Prozentwert (z. B. auf 150 %) und verlässt sich auf die feste Schwelle.
+
+## Changelog
+
+### 1.1.1
+
+- **Netzfrequenz repariert:** Energy-Charts liefert die Frequenz mit rund 50 Minuten Verzug. Die bisherige Grenze von 15 Minuten machte deshalb alle Frequenz-Entitäten dauerhaft unavailable.
+  - Die Stale-Grenze liegt jetzt bei 3 Stunden und ist in den Optionen einstellbar (30 min bis 12 h).
+  - Minimum und Maximum beziehen sich auf die Stunde vor dem neuesten Messwert. Der Puffer hält 3 Stunden.
+  - Der erste Abruf und der Abruf nach einem Neustart reichen mindestens 3 Stunden zurück.
+  - Ein einzelner fehlgeschlagener Abruf macht die Frequenz-Entitäten nicht mehr unavailable.
+- **Neu:** Sensor „Frequenz Datenalter“ (Diagnose) und Attribut `measured_at` am Binärsensor; Attribute `window_start`, `window_end` und `window_basis` an Minimum und Maximum.
+- **Import-Export-Saldo:** Das Vorzeichen ist jetzt positiv = Export, negativ = Import (Energy-Charts selbst zählt umgekehrt). Neues Attribut `direction`. Achtung: In der Langzeitstatistik ändert sich damit ab dem Update das Vorzeichen.
+- Strahlung (BfS), Netzampel und die übrige Erzeugung sind unverändert. Domain, eindeutige IDs und Entitäts-IDs bleiben gleich.
+
+### 1.1.0
+
+- Stromnetz (Energy-Charts) als zweite Datenquelle: Netzampel, Netzfrequenz, Last und Erzeugung.
+- Neuer Anzeigename „Umwelt & Netz (BfS / Energy-Charts)“.
+
+### 1.0.0
+
+- Erste Version: Ortsdosisleistung des BfS.
 
 ## Entwicklung und Tests
 

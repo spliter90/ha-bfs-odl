@@ -29,7 +29,7 @@
         "data_description": {
           "postal_code": "5-digit German postal code, e.g. 61273.",
           "enable_signal": "Renewable share and traffic light per quarter hour, forecast and next green window.",
-          "enable_frequency": "Frequency measured by Fraunhofer ISE in Freiburg (Continental Europe grid).",
+          "enable_frequency": "Frequency measured by Fraunhofer ISE in Freiburg (Continental Europe grid). Minimum and maximum refer to the last hour of available data.",
           "enable_power": "Load, residual load and generation by source for Germany."
         }
       },
@@ -99,17 +99,19 @@
           "signal_interval": "Traffic light update interval",
           "frequency_interval": "Frequency update interval",
           "power_interval": "Generation update interval",
-          "frequency_threshold": "Frequency deviation limit"
+          "frequency_threshold": "Frequency deviation limit",
+          "frequency_stale_after": "Frequency data valid for"
         },
         "data_description": {
           "postal_code": "5-digit German postal code, e.g. 61273.",
           "enable_signal": "Renewable share and traffic light per quarter hour, forecast and next green window.",
-          "enable_frequency": "Frequency measured by Fraunhofer ISE in Freiburg (Continental Europe grid).",
+          "enable_frequency": "Frequency measured by Fraunhofer ISE in Freiburg (Continental Europe grid). Minimum and maximum refer to the last hour of available data.",
           "enable_power": "Load, residual load and generation by source for Germany.",
           "signal_interval": "At least 5 minutes. Values change every quarter hour.",
           "frequency_interval": "At least 30 seconds. Only new values since the last update are fetched.",
           "power_interval": "At least 5 minutes. Energy-Charts publishes quarter-hourly values, often with a delay.",
-          "frequency_threshold": "The binary sensor turns on when the frequency deviates from 50 Hz by more than this value."
+          "frequency_threshold": "The binary sensor turns on when the frequency deviates from 50 Hz by more than this value.",
+          "frequency_stale_after": "30 minutes to 12 hours. Energy-Charts publishes the grid frequency with a delay of about 50 minutes; older data makes the frequency entities unavailable."
         }
       }
     },
@@ -214,7 +216,10 @@
         "name": "Grid frequency",
         "state_attributes": {
           "measured_at": {
-            "name": "Measured at"
+            "name": "Last measurement"
+          },
+          "data_age_minutes": {
+            "name": "Data age (minutes)"
           },
           "samples_1h": {
             "name": "Samples (1 h)"
@@ -225,10 +230,52 @@
         "name": "Frequency deviation"
       },
       "frequency_minimum": {
-        "name": "Frequency minimum (1 h)"
+        "name": "Frequency minimum (1 h)",
+        "state_attributes": {
+          "window_start": {
+            "name": "Window start"
+          },
+          "window_end": {
+            "name": "Window end (latest measurement)"
+          },
+          "window_basis": {
+            "name": "Window basis",
+            "state": {
+              "latest_data": "Last hour of available data"
+            }
+          },
+          "samples_1h": {
+            "name": "Samples (1 h)"
+          }
+        }
       },
       "frequency_maximum": {
-        "name": "Frequency maximum (1 h)"
+        "name": "Frequency maximum (1 h)",
+        "state_attributes": {
+          "window_start": {
+            "name": "Window start"
+          },
+          "window_end": {
+            "name": "Window end (latest measurement)"
+          },
+          "window_basis": {
+            "name": "Window basis",
+            "state": {
+              "latest_data": "Last hour of available data"
+            }
+          },
+          "samples_1h": {
+            "name": "Samples (1 h)"
+          }
+        }
+      },
+      "frequency_data_age": {
+        "name": "Frequency data age",
+        "state_attributes": {
+          "measured_at": {
+            "name": "Last measurement"
+          }
+        }
       },
       "power_load": {
         "name": "Load"
@@ -261,7 +308,12 @@
         "name": "Gas"
       },
       "power_cross_border": {
-        "name": "Import/export balance"
+        "name": "Import/export balance",
+        "state_attributes": {
+          "direction": {
+            "name": "Direction"
+          }
+        }
       },
       "renewable_share_load": {
         "name": "Renewable share of load"
@@ -314,6 +366,9 @@
           },
           "deviation_mhz": {
             "name": "Deviation (mHz)"
+          },
+          "measured_at": {
+            "name": "Last measurement"
           }
         }
       }

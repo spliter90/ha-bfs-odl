@@ -13,12 +13,17 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfFrequency, UnitOfPower
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfFrequency,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.helpers.typing import StateType
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    FREQUENCY_STALE_AFTER,
     SIGNAL_FORECAST_HOURS,
     SIGNAL_OPTIONS,
 )
@@ -42,6 +47,8 @@ class GridSensorEntityDescription(SensorEntityDescription):
     attributes_fn: Callable[[Any, datetime], dict[str, Any] | None] = (
         lambda data, now: None
     )
+    # Auch bei veralteten Daten verfügbar (z. B. das Datenalter selbst)
+    available_when_stale: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -126,8 +133,26 @@ SIGNAL_SENSORS: tuple[GridSensorEntityDescription, ...] = (
 # ---------------------------------------------------------------------------
 
 
+def _data_age_minutes(data: FrequencyData, now: datetime) -> float:
+    return round((now - data.time).total_seconds() / 60, 1)
+
+
 def _frequency_attributes(data: FrequencyData, now: datetime) -> dict[str, Any]:
-    return {"measured_at": data.time.isoformat(), "samples_1h": data.count}
+    return {
+        "measured_at": data.time.isoformat(),
+        "data_age_minutes": _data_age_minutes(data, now),
+        "samples_1h": data.count,
+    }
+
+
+def _window_attributes(data: FrequencyData, now: datetime) -> dict[str, Any]:
+    # Die "Stunde" endet beim neuesten verfügbaren Messwert, nicht bei "jetzt"
+    return {
+        "window_start": data.window_start.isoformat(),
+        "window_end": data.time.isoformat(),
+        "window_basis": "latest_data",
+        "samples_1h": data.count,
+    }
 
 
 FREQUENCY_SENSORS: tuple[GridSensorEntityDescription, ...] = (
@@ -157,6 +182,7 @@ FREQUENCY_SENSORS: tuple[GridSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda data, now: data.minimum,
+        attributes_fn=_window_attributes,
     ),
     GridSensorEntityDescription(
         key="maximum_1h",
@@ -166,6 +192,19 @@ FREQUENCY_SENSORS: tuple[GridSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda data, now: data.maximum,
+        attributes_fn=_window_attributes,
+    ),
+    GridSensorEntityDescription(
+        key="data_age",
+        translation_key="frequency_data_age",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_data_age_minutes,
+        attributes_fn=lambda data, now: {"measured_at": data.time.isoformat()},
+        available_when_stale=True,
     ),
 )
 
@@ -185,10 +224,17 @@ def _power_value(key: str) -> Callable[[PowerData, datetime], float | None]:
 def _power_attributes(key: str) -> Callable[[PowerData, datetime], dict[str, Any]]:
     def _attributes(data: PowerData, now: datetime) -> dict[str, Any]:
         item = data.values.get(key)
-        return {
+        attributes: dict[str, Any] = {
             "data_time": item.time.isoformat() if item else None,
             "production_types": list(item.sources) if item else [],
         }
+        if key == "cross_border":
+            # Vorzeichen: positiv = Export, negativ = Import
+            if item is None or item.value == 0:
+                attributes["direction"] = None
+            else:
+                attributes["direction"] = "Export" if item.value > 0 else "Import"
+        return attributes
 
     return _attributes
 
@@ -307,7 +353,9 @@ class SignalSensor(GridSensor):
 
 
 class FrequencySensor(GridSensor):
-    """Frequenz-Sensor; veraltete Werte gelten als Ausfall."""
+    """Frequenz-Sensor; Werte älter als die Stale-Grenze gelten als Ausfall."""
+
+    coordinator: FrequencyCoordinator
 
     def __init__(
         self,
@@ -319,10 +367,14 @@ class FrequencySensor(GridSensor):
 
     @property
     def available(self) -> bool:
-        """Nicht verfügbar, wenn der letzte Wert zu alt ist."""
+        """Nur nicht verfügbar, wenn die Daten älter als die Stale-Grenze sind."""
+        # Ein einzelner fehlgeschlagener Abruf macht die Entität nicht unavailable,
+        # solange die vorhandenen Daten jünger als die Stale-Grenze sind.
         data: FrequencyData | None = self.coordinator.data
-        return (
-            super().available
-            and data is not None
-            and dt_util.utcnow() - data.time <= FREQUENCY_STALE_AFTER
-        )
+        if data is None:
+            return False
+        if not self.entity_description.available_when_stale and (
+            self.coordinator.is_stale(data)
+        ):
+            return False
+        return self.native_value is not None

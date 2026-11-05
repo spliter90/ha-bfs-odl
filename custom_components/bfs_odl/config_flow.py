@@ -33,6 +33,7 @@ from .const import (
     CONF_ENABLE_SIGNAL,
     CONF_ENTRY_TYPE,
     CONF_FREQUENCY_INTERVAL,
+    CONF_FREQUENCY_STALE_AFTER,
     CONF_FREQUENCY_THRESHOLD,
     CONF_KENN,
     CONF_PERCENT_ABOVE_MEAN,
@@ -43,6 +44,7 @@ from .const import (
     CONF_STATION_NAME,
     CONF_THRESHOLD,
     DEFAULT_FREQUENCY_INTERVAL,
+    DEFAULT_FREQUENCY_STALE_AFTER,
     DEFAULT_FREQUENCY_THRESHOLD,
     DEFAULT_PERCENT_ABOVE_MEAN,
     DEFAULT_POWER_INTERVAL,
@@ -54,11 +56,13 @@ from .const import (
     ENTRY_TYPE_ODL,
     GRID_UNIQUE_ID,
     MAX_FREQUENCY_INTERVAL,
+    MAX_FREQUENCY_STALE_AFTER,
     MAX_FREQUENCY_THRESHOLD,
     MAX_POWER_INTERVAL,
     MAX_SCAN_INTERVAL,
     MAX_SIGNAL_INTERVAL,
     MIN_FREQUENCY_INTERVAL,
+    MIN_FREQUENCY_STALE_AFTER,
     MIN_FREQUENCY_THRESHOLD,
     MIN_POWER_INTERVAL,
     MIN_SCAN_INTERVAL,
@@ -93,6 +97,7 @@ DEFAULT_GRID_OPTIONS: dict[str, Any] = {
     CONF_FREQUENCY_INTERVAL: DEFAULT_FREQUENCY_INTERVAL,
     CONF_POWER_INTERVAL: DEFAULT_POWER_INTERVAL,
     CONF_FREQUENCY_THRESHOLD: DEFAULT_FREQUENCY_THRESHOLD,
+    CONF_FREQUENCY_STALE_AFTER: DEFAULT_FREQUENCY_STALE_AFTER,
 }
 
 GRID_TOGGLES = (CONF_ENABLE_SIGNAL, CONF_ENABLE_FREQUENCY, CONF_ENABLE_POWER)
@@ -471,6 +476,9 @@ class BfsOdlOptionsFlow(OptionsFlowWithReload):
                         CONF_FREQUENCY_THRESHOLD: float(
                             user_input[CONF_FREQUENCY_THRESHOLD]
                         ),
+                        CONF_FREQUENCY_STALE_AFTER: int(
+                            user_input[CONF_FREQUENCY_STALE_AFTER]
+                        ),
                     }
                 )
 
@@ -491,6 +499,9 @@ class BfsOdlOptionsFlow(OptionsFlowWithReload):
                 ),
                 vol.Required(CONF_FREQUENCY_THRESHOLD): _number(
                     MIN_FREQUENCY_THRESHOLD, MAX_FREQUENCY_THRESHOLD, "mHz"
+                ),
+                vol.Required(CONF_FREQUENCY_STALE_AFTER): _number(
+                    MIN_FREQUENCY_STALE_AFTER, MAX_FREQUENCY_STALE_AFTER, "min"
                 ),
             }
         )

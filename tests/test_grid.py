@@ -33,6 +33,7 @@ from custom_components.bfs_odl.const import (
     CONF_ENABLE_SIGNAL,
     CONF_ENTRY_TYPE,
     CONF_FREQUENCY_INTERVAL,
+    CONF_FREQUENCY_STALE_AFTER,
     CONF_FREQUENCY_THRESHOLD,
     CONF_POSTAL_CODE,
     CONF_POWER_INTERVAL,
@@ -93,19 +94,27 @@ def signal_payload(now: datetime) -> dict[str, Any]:
     }
 
 
-# Einmaliger Frequenzeinbruch um 09:30:00 UTC
-DIP_SECOND = int(datetime.fromisoformat("2026-11-05T09:30:00+00:00").timestamp())
+def _utc_ts(value: str) -> int:
+    return int(datetime.fromisoformat(value).timestamp())
 
 
-def frequency_value(second: int) -> float:
+# Einmaliger Frequenzeinbruch um 08:45:00 UTC (in der letzten Stunde der Daten)
+DIP_SECOND = _utc_ts("2026-11-05T08:45:00+00:00")
+# Energy-Charts liefert die Frequenz mit rund 50 Minuten Verzug
+LIVE_DELAY = 50 * 60
+
+
+def frequency_value(second: int, dip: int = DIP_SECOND) -> float:
     """Gleichmäßige Schwankung um 50 Hz mit einem Einbruch."""
-    if second == DIP_SECOND:
+    if second == dip:
         return 49.93
     return round(50.0 + 0.02 * math.sin(second / 120), 4)
 
 
-def frequency_side_effect(delay: int = 5, offset_hz: float = 0.0):
-    """Liefert für start/end aus der Anfrage sekundengenaue Werte."""
+def frequency_side_effect(
+    delay: int = LIVE_DELAY, offset_hz: float = 0.0, dip: int = DIP_SECOND
+):
+    """Liefert für start/end aus der Anfrage sekundengenaue Werte mit Verzug."""
 
     async def _side_effect(
         method: str, url: Any, data: Any
@@ -116,7 +125,7 @@ def frequency_side_effect(delay: int = 5, offset_hz: float = 0.0):
         seconds = list(range(start, end + 1))
         payload = {
             "unix_seconds": seconds,
-            "data": [round(frequency_value(s) + offset_hz, 4) for s in seconds],
+            "data": [round(frequency_value(s, dip) + offset_hz, 4) for s in seconds],
             "deprecated": False,
         }
         return AiohttpClientMockResponse(method, url, text=json.dumps(payload))
@@ -214,6 +223,7 @@ def grid_entry() -> MockConfigEntry:
             CONF_FREQUENCY_INTERVAL: 60,
             CONF_POWER_INTERVAL: 15,
             CONF_FREQUENCY_THRESHOLD: 100,
+            CONF_FREQUENCY_STALE_AFTER: 180,
         },
     )
 
@@ -451,45 +461,102 @@ def test_signal_index_by_time_not_last_entry() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_frequency(
+async def test_frequency_50_minutes_old_is_valid(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     grid_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Letzter Wert, Abweichung, Min/Max der Stunde; nur neue Werte nachladen."""
-    freezer.move_to(NOW)
+    """Live-Verhalten: 50 Minuten alte Daten sind gültig; danach nur neue Werte."""
+    freezer.move_to(NOW)  # 10:07:30, neuester Messwert 09:17:30
     mock_grid_api(aioclient_mock, dt_util.utcnow())
     await _setup(hass, grid_entry)
 
+    # Erster Abruf: 4 h zurück (3 h Stale-Grenze + 1 h Fenster)
+    first = calls_to(aioclient_mock, FREQUENCY_URL)[0]
+    assert int(parse_qs(first.query_string)["start"][0]) == _utc_ts(
+        "2026-11-05T06:07:30+00:00"
+    )
+
+    latest = _utc_ts("2026-11-05T09:17:30+00:00")
     frequency = _state(hass, "sensor", "frequency_frequency")
+    assert frequency.state != STATE_UNAVAILABLE
     assert frequency.attributes["unit_of_measurement"] == "Hz"
     assert frequency.attributes["device_class"] == "frequency"
     assert frequency.attributes["state_class"] == "measurement"
-    assert frequency.attributes["samples_1h"] == 3596
-    last_second = int(dt_util.utcnow().timestamp()) - 5
-    assert float(frequency.state) == frequency_value(last_second)
+    assert frequency.attributes["measured_at"] == "2026-11-05T09:17:30+00:00"
+    assert frequency.attributes["data_age_minutes"] == 50.0
+    assert frequency.attributes["samples_1h"] == 3601
+    assert float(frequency.state) == frequency_value(latest)
+
     deviation = _state(hass, "sensor", "frequency_deviation")
     assert deviation.attributes["unit_of_measurement"] == "mHz"
     assert float(deviation.state) == pytest.approx(
-        (frequency_value(last_second) - 50) * 1000, abs=0.1
+        (frequency_value(latest) - 50) * 1000, abs=0.1
     )
-    assert float(_state(hass, "sensor", "frequency_minimum_1h").state) == 49.93
+
+    age = _state(hass, "sensor", "frequency_data_age")
+    assert age.entity_id == (
+        "sensor.stromnetz_deutschland_energy_charts_frequenz_datenalter"
+    )
+    assert float(age.state) == 50.0
+    assert age.attributes["unit_of_measurement"] == "min"
+    assert age.attributes["state_class"] == "measurement"
+    registry = er.async_get(hass)
+    assert registry.async_get(age.entity_id).entity_category == "diagnostic"
+
+    minimum = _state(hass, "sensor", "frequency_minimum_1h")
+    assert minimum.entity_id == (
+        "sensor.stromnetz_deutschland_energy_charts_frequenz_minimum_1_h"
+    )
+    assert float(minimum.state) == 49.93
+    assert minimum.attributes["window_start"] == "2026-11-05T08:17:30+00:00"
+    assert minimum.attributes["window_end"] == "2026-11-05T09:17:30+00:00"
+    assert minimum.attributes["window_basis"] == "latest_data"
     assert float(_state(hass, "sensor", "frequency_maximum_1h").state) == pytest.approx(
         50.02, abs=0.001
     )
-    # Maßgeblich ist der aktuelle Wert, nicht der Einbruch von 09:30
-    assert _state(hass, "binary_sensor", "frequency_abnormal").state == STATE_OFF
+    abnormal = _state(hass, "binary_sensor", "frequency_abnormal")
+    assert abnormal.state == STATE_OFF
+    assert abnormal.attributes["measured_at"] == "2026-11-05T09:17:30+00:00"
 
     # Nächster Abruf nach 60 s fragt nur ab der letzten Sekunde an
     freezer.tick(timedelta(seconds=61))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
     second = calls_to(aioclient_mock, FREQUENCY_URL)[-1]
-    assert int(parse_qs(second.query_string)["start"][0]) == last_second + 1
+    assert int(parse_qs(second.query_string)["start"][0]) == latest + 1
     assert (
-        _state(hass, "sensor", "frequency_frequency").attributes["samples_1h"] == 3596
+        _state(hass, "sensor", "frequency_frequency").attributes["samples_1h"] == 3601
     )
+    diag = await async_get_config_entry_diagnostics(hass, grid_entry)
+    assert diag["coordinators"]["frequency"]["buffer_size"] == 3 * 3600 + 1
+
+
+async def test_frequency_window_relative_to_latest_value(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    grid_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Min/Max nur aus der Stunde vor dem neuesten Wert, nicht aus dem ganzen Puffer."""
+    freezer.move_to(NOW)
+    # Einbruch um 07:30: im 3-h-Puffer, aber vor der letzten Datenstunde (ab 08:17:30)
+    dip = _utc_ts("2026-11-05T07:30:00+00:00")
+    aioclient_mock.get(SIGNAL_URL, text=json.dumps(signal_payload(dt_util.utcnow())))
+    aioclient_mock.get(FREQUENCY_URL, side_effect=frequency_side_effect(dip=dip))
+    aioclient_mock.get(
+        TOTAL_POWER_URL, text=json.dumps(power_payload(dt_util.utcnow()))
+    )
+    await _setup(hass, grid_entry)
+
+    assert float(_state(hass, "sensor", "frequency_minimum_1h").state) > 49.97
+    diag = await async_get_config_entry_diagnostics(hass, grid_entry)
+    frequency = diag["coordinators"]["frequency"]
+    assert frequency["buffer_start"] == "2026-11-05T06:17:30+00:00"
+    assert frequency["buffer_end"] == "2026-11-05T09:17:30+00:00"
+    assert frequency["stale_after_minutes"] == 180
+    assert frequency["data"]["window_start"] == "2026-11-05T08:17:30+00:00"
 
 
 async def test_frequency_abnormal(
@@ -515,31 +582,77 @@ async def test_frequency_abnormal(
     assert -170 <= abnormal.attributes["deviation_mhz"] <= -130
 
 
-async def test_frequency_normal_and_stale(
+async def test_frequency_older_than_stale_limit(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     grid_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Ohne Ausreißer ist der Binärsensor aus; alte Werte sind nicht verfügbar."""
-    freezer.move_to("2026-11-05 10:45:00+00:00")  # Einbruch liegt vor der Stunde
+    """Fehlschläge allein ändern nichts; erst Daten über 3 h machen unavailable."""
+    freezer.move_to("2026-11-05 10:45:00+00:00")  # neuester Wert 09:55:00
     mock_grid_api(aioclient_mock, dt_util.utcnow())
     await _setup(hass, grid_entry)
     assert _state(hass, "binary_sensor", "frequency_abnormal").state == STATE_OFF
 
     aioclient_mock.clear_requests()
-    aioclient_mock.get(FREQUENCY_URL, status=404, text='{"detail":"No data"}')
+    aioclient_mock.get(FREQUENCY_URL, exc=TimeoutError())
     aioclient_mock.get(SIGNAL_URL, text=json.dumps(signal_payload(dt_util.utcnow())))
     aioclient_mock.get(
         TOTAL_POWER_URL, text=json.dumps(power_payload(dt_util.utcnow()))
     )
-    for _ in range(20):
-        freezer.tick(timedelta(seconds=61))
-        async_fire_time_changed(hass)
-        await hass.async_block_till_done()
+
+    # 2 h später: Abrufe scheitern, Daten 2 h 50 min alt -> noch gültig
+    freezer.tick(timedelta(hours=2))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert grid_entry.runtime_data.frequency.last_fetch_error is not None
+    assert _state(hass, "sensor", "frequency_frequency").state != STATE_UNAVAILABLE
+    assert _state(hass, "binary_sensor", "frequency_abnormal").state == STATE_OFF
+
+    # 11 min später: Daten 3 h 1 min alt -> unavailable
+    freezer.tick(timedelta(minutes=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    for suffix in (
+        "frequency_frequency",
+        "frequency_deviation",
+        "frequency_minimum_1h",
+        "frequency_maximum_1h",
+    ):
+        assert _state(hass, "sensor", suffix).state == STATE_UNAVAILABLE, suffix
+    assert (
+        _state(hass, "binary_sensor", "frequency_abnormal").state == STATE_UNAVAILABLE
+    )
+    # Das Datenalter bleibt sichtbar
+    assert float(_state(hass, "sensor", "frequency_data_age").state) == 181.0
+
+
+async def test_frequency_stale_limit_is_configurable(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    grid_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Mit 30 min Stale-Grenze sind 50 Minuten alte Daten unavailable."""
+    freezer.move_to(NOW)
+    mock_grid_api(aioclient_mock, dt_util.utcnow())
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=GRID_UNIQUE_ID,
+        data=dict(grid_entry.data),
+        options={**grid_entry.options, CONF_FREQUENCY_STALE_AFTER: 30},
+    )
+    await _setup(hass, entry)
+
     assert _state(hass, "sensor", "frequency_frequency").state == STATE_UNAVAILABLE
     assert (
         _state(hass, "binary_sensor", "frequency_abnormal").state == STATE_UNAVAILABLE
+    )
+    assert float(_state(hass, "sensor", "frequency_data_age").state) == 50.0
+    # Erster Abruf trotzdem mindestens 3 h zurück
+    first = calls_to(aioclient_mock, FREQUENCY_URL)[0]
+    assert int(parse_qs(first.query_string)["start"][0]) == _utc_ts(
+        "2026-11-05T07:07:30+00:00"
     )
 
 
@@ -579,12 +692,18 @@ async def test_power(
         "power_lignite": 9.8,
         "power_hard_coal": 4.1,
         "power_gas": 7.4,  # ohne Kokereigas
-        "power_cross_border": 2.5,
+        "power_cross_border": -2.5,  # Energy-Charts +2500 MW = Import
     }
     for suffix, value in expected.items():
         assert float(_state(hass, "sensor", suffix).state) == pytest.approx(value), (
             suffix
         )
+
+    trade = _state(hass, "sensor", "power_cross_border")
+    assert trade.entity_id == (
+        "sensor.stromnetz_deutschland_energy_charts_import_export_saldo"
+    )
+    assert trade.attributes["direction"] == "Import"
 
     gas = _state(hass, "sensor", "power_gas")
     assert gas.attributes["data_time"] == (last_valid - timedelta(hours=1)).isoformat()
@@ -615,6 +734,18 @@ async def test_power_fallback_to_public_power(
     assert share.attributes["production_types"] == ["Renewable share of load"]
     diag = await async_get_config_entry_diagnostics(hass, grid_entry)
     assert diag["coordinators"]["power"]["endpoint"] == "public_power"
+
+
+def test_cross_border_sign_positive_is_export() -> None:
+    """Energy-Charts: negativ = Export; die Integration dreht auf positiv = Export."""
+    now = dt_util.parse_datetime(NOW)
+    assert now is not None
+    payload = power_payload(now)
+    for entry in payload["production_types"]:
+        if entry["name"] == "Cross border electricity trading":
+            entry["data"] = [-1800.0 if v is not None else None for v in entry["data"]]
+    data = parse_power(payload)
+    assert data.values["cross_border"].value == pytest.approx(1.8)
 
 
 def test_parse_power_all_null() -> None:
@@ -707,12 +838,14 @@ async def test_options_disable_source_removes_entities(
             CONF_FREQUENCY_INTERVAL: 120,
             CONF_POWER_INTERVAL: 60,
             CONF_FREQUENCY_THRESHOLD: 150,
+            CONF_FREQUENCY_STALE_AFTER: 240,
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
 
     assert grid_entry.options[CONF_FREQUENCY_THRESHOLD] == 150
+    assert grid_entry.options[CONF_FREQUENCY_STALE_AFTER] == 240
     assert grid_entry.options[CONF_ENABLE_FREQUENCY] is False
     assert (
         registry.async_get_entity_id(
@@ -758,7 +891,8 @@ async def test_grid_diagnostics(
     assert diag["entry"]["options"][CONF_POSTAL_CODE] == "**REDACTED**"
     assert set(diag["coordinators"]) == {"signal", "frequency", "power"}
     assert diag["coordinators"]["signal"]["data"]["current"]["signal"] == 1
-    assert diag["coordinators"]["frequency"]["buffer_size"] == 3596
+    assert diag["coordinators"]["frequency"]["buffer_size"] == 3 * 3600 + 1
+    assert diag["coordinators"]["frequency"]["data_age_minutes"] == 50.0
     assert "Fossil gas" in diag["coordinators"]["power"]["production_types"]
     json.dumps(diag)
 

@@ -10,7 +10,6 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_FREQUENCY_THRESHOLD,
     DEFAULT_FREQUENCY_THRESHOLD,
-    FREQUENCY_STALE_AFTER,
     SIGNAL_BEST,
 )
 from .grid_coordinator import FrequencyCoordinator, GridRuntimeData, SignalCoordinator
@@ -82,11 +81,10 @@ class FrequencyAbnormalSensor(GridEntity[FrequencyCoordinator], BinarySensorEnti
 
     @property
     def available(self) -> bool:
-        """Nicht verfügbar, wenn der letzte Wert zu alt ist."""
-        return (
-            super().available
-            and dt_util.utcnow() - self.coordinator.data.time <= FREQUENCY_STALE_AFTER
-        )
+        """Nur nicht verfügbar, wenn die Daten älter als die Stale-Grenze sind."""
+        # Ein einzelner fehlgeschlagener Abruf zählt nicht, nur das Datenalter
+        data = self.coordinator.data
+        return data is not None and not self.coordinator.is_stale(data)
 
     @property
     def is_on(self) -> bool:
@@ -96,7 +94,9 @@ class FrequencyAbnormalSensor(GridEntity[FrequencyCoordinator], BinarySensorEnti
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Schwelle und Abweichung."""
+        data = self.coordinator.data
         return {
             "threshold_mhz": self._threshold,
-            "deviation_mhz": round(self.coordinator.data.deviation_mhz, 1),
+            "deviation_mhz": round(data.deviation_mhz, 1),
+            "measured_at": data.time.isoformat(),
         }

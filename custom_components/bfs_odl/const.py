@@ -94,6 +94,7 @@ CONF_SIGNAL_INTERVAL: Final = "signal_interval"
 CONF_FREQUENCY_INTERVAL: Final = "frequency_interval"
 CONF_POWER_INTERVAL: Final = "power_interval"
 CONF_FREQUENCY_THRESHOLD: Final = "frequency_threshold"
+CONF_FREQUENCY_STALE_AFTER: Final = "frequency_stale_after"
 
 DEFAULT_SIGNAL_INTERVAL: Final = 15  # Minuten
 MIN_SIGNAL_INTERVAL: Final = 5
@@ -107,11 +108,18 @@ MAX_POWER_INTERVAL: Final = 240
 DEFAULT_FREQUENCY_THRESHOLD: Final = 100  # mHz
 MIN_FREQUENCY_THRESHOLD: Final = 10
 MAX_FREQUENCY_THRESHOLD: Final = 1000
+# Energy-Charts liefert die Frequenz mit rund 50 Minuten Verzug aus
+DEFAULT_FREQUENCY_STALE_AFTER: Final = 180  # Minuten
+MIN_FREQUENCY_STALE_AFTER: Final = 30
+MAX_FREQUENCY_STALE_AFTER: Final = 720
 
 NOMINAL_FREQUENCY: Final = 50.0  # Hz
+# Minimum/Maximum über die letzte Stunde der vorhandenen Daten (nicht ab "jetzt")
 FREQUENCY_WINDOW: Final = timedelta(hours=1)
-# Ältere Frequenzwerte gelten als Ausfall
-FREQUENCY_STALE_AFTER: Final = timedelta(minutes=15)
+# So viele Sekundenwerte bleiben im Speicher (gemessen ab dem neuesten Wert)
+FREQUENCY_BUFFER: Final = timedelta(hours=3)
+# Erster Abruf bzw. nach einem Neustart: mindestens so weit zurück
+FREQUENCY_INITIAL_LOOKBACK: Final = timedelta(hours=3)
 # Erzeugungswerte erscheinen oft mit Verzug; so weit wird zurückgeschaut
 POWER_LOOKBACK: Final = timedelta(hours=24)
 SIGNAL_FORECAST_HOURS: Final = 24

@@ -271,6 +271,7 @@ class FrequencyData:
     minimum: float
     maximum: float
     count: int
+    window_start: datetime
 
     @property
     def deviation_mhz(self) -> float:
@@ -299,7 +300,9 @@ POWER_TYPES: dict[str, dict[str, Any]] = {
     "lignite": {"contains": ("brown coal", "lignite")},
     "hard_coal": {"contains": ("hard coal",)},
     "gas": {"starts": ("fossil gas",)},
-    "cross_border": {"contains": ("cross border",)},
+    # Energy-Charts: positiv = Import, negativ = Export. Hier umgedreht, damit
+    # positiv = Export (Nettoexport) gilt.
+    "cross_border": {"contains": ("cross border",), "invert": True},
 }
 RENEWABLE_SHARE_NAMES = ("renewable share of load",)
 # Für die eigene Berechnung des Anteils Erneuerbarer an der Last
@@ -382,6 +385,8 @@ def parse_power(payload: dict[str, Any]) -> PowerData:
             assert when is not None
             stamp = when if stamp is None else min(stamp, when)
         if used and stamp is not None:
+            if rule.get("invert"):
+                total = -total
             values[key] = PowerValue(
                 value=total / 1000, time=stamp, sources=tuple(used)
             )

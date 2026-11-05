@@ -1,11 +1,21 @@
 {
   "entity": {
     "sensor": {
-      "dose_rate": { "default": "mdi:radioactive" },
-      "dose_rate_cosmic": { "default": "mdi:weather-night" },
-      "dose_rate_terrestrial": { "default": "mdi:terrain" },
-      "dose_rate_mean_7d": { "default": "mdi:chart-bell-curve-cumulative" },
-      "measurement_time": { "default": "mdi:clock-outline" },
+      "dose_rate": {
+        "default": "mdi:radioactive"
+      },
+      "dose_rate_cosmic": {
+        "default": "mdi:weather-night"
+      },
+      "dose_rate_terrestrial": {
+        "default": "mdi:terrain"
+      },
+      "dose_rate_mean_7d": {
+        "default": "mdi:chart-bell-curve-cumulative"
+      },
+      "measurement_time": {
+        "default": "mdi:clock-outline"
+      },
       "status": {
         "default": "mdi:access-point",
         "state": {
@@ -13,6 +23,69 @@
           "defective": "mdi:access-point-off",
           "test_operation": "mdi:access-point-network"
         }
+      },
+      "grid_signal": {
+        "default": "mdi:traffic-light",
+        "state": {
+          "green": "mdi:leaf",
+          "yellow": "mdi:traffic-light",
+          "red": "mdi:factory",
+          "grid_congestion": "mdi:transmission-tower-off"
+        }
+      },
+      "signal_renewable_share": {
+        "default": "mdi:leaf"
+      },
+      "next_green_window": {
+        "default": "mdi:clock-start"
+      },
+      "grid_frequency": {
+        "default": "mdi:sine-wave"
+      },
+      "frequency_deviation": {
+        "default": "mdi:plus-minus-variant"
+      },
+      "frequency_minimum": {
+        "default": "mdi:arrow-collapse-down"
+      },
+      "frequency_maximum": {
+        "default": "mdi:arrow-collapse-up"
+      },
+      "power_load": {
+        "default": "mdi:transmission-tower"
+      },
+      "power_residual_load": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "power_wind_onshore": {
+        "default": "mdi:wind-turbine"
+      },
+      "power_wind_offshore": {
+        "default": "mdi:wind-turbine"
+      },
+      "power_solar": {
+        "default": "mdi:solar-power-variant"
+      },
+      "power_biomass": {
+        "default": "mdi:sprout"
+      },
+      "power_hydro": {
+        "default": "mdi:hydro-power"
+      },
+      "power_lignite": {
+        "default": "mdi:factory"
+      },
+      "power_hard_coal": {
+        "default": "mdi:factory"
+      },
+      "power_gas": {
+        "default": "mdi:fire"
+      },
+      "power_cross_border": {
+        "default": "mdi:swap-horizontal"
+      },
+      "renewable_share_load": {
+        "default": "mdi:leaf-circle"
       }
     },
     "binary_sensor": {
@@ -21,6 +94,20 @@
         "state": {
           "on": "mdi:radioactive-circle",
           "off": "mdi:radioactive-off"
+        }
+      },
+      "good_time_for_consumption": {
+        "default": "mdi:power-plug",
+        "state": {
+          "on": "mdi:leaf",
+          "off": "mdi:power-plug-off"
+        }
+      },
+      "frequency_abnormal": {
+        "default": "mdi:sine-wave",
+        "state": {
+          "on": "mdi:alert",
+          "off": "mdi:sine-wave"
         }
       }
     }

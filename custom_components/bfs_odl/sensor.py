@@ -21,6 +21,8 @@ from homeassistant.helpers.typing import StateType
 from .const import STATUS_OPTIONS, UNIT_USV_H
 from .coordinator import BfsOdlConfigEntry, BfsOdlCoordinator, BfsOdlData
 from .entity import BfsOdlEntity, measurement_usable
+from .grid_coordinator import GridRuntimeData
+from .grid_sensor import build_grid_sensors
 
 PARALLEL_UPDATES = 0
 
@@ -100,10 +102,13 @@ async def async_setup_entry(
     entry: BfsOdlConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Legt die Sensoren einer Sonde an."""
-    coordinator = entry.runtime_data
+    """Legt die Sensoren einer Sonde bzw. des Stromnetzes an."""
+    runtime_data = entry.runtime_data
+    if isinstance(runtime_data, GridRuntimeData):
+        async_add_entities(build_grid_sensors(runtime_data))
+        return
     async_add_entities(
-        BfsOdlSensor(coordinator, description) for description in SENSORS
+        BfsOdlSensor(runtime_data, description) for description in SENSORS
     )
 
 

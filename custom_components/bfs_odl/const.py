@@ -1,4 +1,4 @@
-"""Konstanten für die Integration BfS Ortsdosisleistung (ODL)."""
+"""Konstanten für die Integration Umwelt & Netz (BfS / Energy-Charts)."""
 
 from __future__ import annotations
 
@@ -63,3 +63,74 @@ SITE_STATUS_MAP: Final[dict[int, str]] = {
     2: STATUS_DEFECTIVE,
     3: STATUS_TEST_OPERATION,
 }
+
+# ---------------------------------------------------------------------------
+# Art des Eintrags. Bestehende Einträge haben kein "entry_type" und sind ODL.
+# ---------------------------------------------------------------------------
+CONF_ENTRY_TYPE: Final = "entry_type"
+ENTRY_TYPE_ODL: Final = "odl"
+ENTRY_TYPE_GRID: Final = "grid"
+
+# ---------------------------------------------------------------------------
+# Stromnetz (Energy-Charts, Fraunhofer ISE)
+# ---------------------------------------------------------------------------
+GRID_UNIQUE_ID: Final = "energy_charts_de"
+GRID_DEVICE_NAME: Final = "Stromnetz Deutschland (Energy-Charts)"
+GRID_MANUFACTURER: Final = "Fraunhofer ISE"
+GRID_MODEL: Final = "Energy-Charts API"
+GRID_URL: Final = "https://www.energy-charts.info/"
+GRID_ATTRIBUTION: Final = "Daten: Energy-Charts, Fraunhofer ISE (CC BY 4.0)"
+
+ENERGY_CHARTS_URL: Final = "https://api.energy-charts.info"
+GRID_COUNTRY: Final = "de"
+# Laut API-Doku gibt es nur die Messung in Freiburg (RG Continental Europe)
+FREQUENCY_REGION: Final = "DE-Freiburg"
+
+CONF_POSTAL_CODE: Final = "postal_code"
+CONF_ENABLE_SIGNAL: Final = "enable_signal"
+CONF_ENABLE_FREQUENCY: Final = "enable_frequency"
+CONF_ENABLE_POWER: Final = "enable_power"
+CONF_SIGNAL_INTERVAL: Final = "signal_interval"
+CONF_FREQUENCY_INTERVAL: Final = "frequency_interval"
+CONF_POWER_INTERVAL: Final = "power_interval"
+CONF_FREQUENCY_THRESHOLD: Final = "frequency_threshold"
+
+DEFAULT_SIGNAL_INTERVAL: Final = 15  # Minuten
+MIN_SIGNAL_INTERVAL: Final = 5
+MAX_SIGNAL_INTERVAL: Final = 240
+DEFAULT_FREQUENCY_INTERVAL: Final = 60  # Sekunden
+MIN_FREQUENCY_INTERVAL: Final = 30
+MAX_FREQUENCY_INTERVAL: Final = 3600
+DEFAULT_POWER_INTERVAL: Final = 15  # Minuten
+MIN_POWER_INTERVAL: Final = 5
+MAX_POWER_INTERVAL: Final = 240
+DEFAULT_FREQUENCY_THRESHOLD: Final = 100  # mHz
+MIN_FREQUENCY_THRESHOLD: Final = 10
+MAX_FREQUENCY_THRESHOLD: Final = 1000
+
+NOMINAL_FREQUENCY: Final = 50.0  # Hz
+FREQUENCY_WINDOW: Final = timedelta(hours=1)
+# Ältere Frequenzwerte gelten als Ausfall
+FREQUENCY_STALE_AFTER: Final = timedelta(minutes=15)
+# Erzeugungswerte erscheinen oft mit Verzug; so weit wird zurückgeschaut
+POWER_LOOKBACK: Final = timedelta(hours=24)
+SIGNAL_FORECAST_HOURS: Final = 24
+
+# Netzampel: Werte laut Energy-Charts-Doku
+SIGNAL_GRID_CONGESTION: Final = "grid_congestion"  # -1: Rot (Netzengpass)
+SIGNAL_RED: Final = "red"  # 0: Rot (geringer Anteil Erneuerbare)
+SIGNAL_YELLOW: Final = "yellow"  # 1: Gelb (durchschnittlicher Anteil)
+SIGNAL_GREEN: Final = "green"  # 2: Grün (hoher Anteil Erneuerbare)
+SIGNAL_MAP: Final[dict[int, str]] = {
+    -1: SIGNAL_GRID_CONGESTION,
+    0: SIGNAL_RED,
+    1: SIGNAL_YELLOW,
+    2: SIGNAL_GREEN,
+}
+SIGNAL_OPTIONS: Final = [
+    SIGNAL_GREEN,
+    SIGNAL_YELLOW,
+    SIGNAL_RED,
+    SIGNAL_GRID_CONGESTION,
+]
+SIGNAL_BEST: Final = 2

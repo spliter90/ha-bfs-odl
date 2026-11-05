@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -39,7 +39,11 @@ _LOGGER = logging.getLogger(__name__)
 
 DATA_API: HassKey[BfsOdlApi] = HassKey(DOMAIN)
 
-type BfsOdlConfigEntry = ConfigEntry[BfsOdlCoordinator]
+if TYPE_CHECKING:
+    from .grid_coordinator import GridRuntimeData
+
+# Ein Eintrag ist entweder eine ODL-Sonde (Coordinator) oder das Stromnetz
+type BfsOdlConfigEntry = ConfigEntry[BfsOdlCoordinator | GridRuntimeData]
 
 
 @callback

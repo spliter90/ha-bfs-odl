@@ -16,6 +16,8 @@ from .const import (
 )
 from .coordinator import BfsOdlConfigEntry, BfsOdlCoordinator
 from .entity import BfsOdlEntity, measurement_usable
+from .grid_binary_sensor import build_grid_binary_sensors
+from .grid_coordinator import GridRuntimeData
 
 PARALLEL_UPDATES = 0
 
@@ -25,8 +27,12 @@ async def async_setup_entry(
     entry: BfsOdlConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Legt den Binärsensor einer Sonde an."""
-    async_add_entities([BfsOdlElevatedRadiationSensor(entry.runtime_data)])
+    """Legt die Binärsensoren einer Sonde bzw. des Stromnetzes an."""
+    runtime_data = entry.runtime_data
+    if isinstance(runtime_data, GridRuntimeData):
+        async_add_entities(build_grid_binary_sensors(runtime_data))
+        return
+    async_add_entities([BfsOdlElevatedRadiationSensor(runtime_data)])
 
 
 class BfsOdlElevatedRadiationSensor(BfsOdlEntity, BinarySensorEntity):

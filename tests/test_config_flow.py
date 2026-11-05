@@ -39,6 +39,11 @@ async def _start(hass: HomeAssistant, option: str) -> dict:
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == ["odl", "grid"]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "odl"}
+    )
+    assert result["type"] is FlowResultType.MENU
     assert result["menu_options"] == ["location", "manual"]
     return await hass.config_entries.flow.async_configure(
         result["flow_id"], {"next_step_id": option}

@@ -1,13 +1,18 @@
-# BfS Ortsdosisleistung (ODL) für Home Assistant
+# Umwelt & Netz (BfS / Energy-Charts) für Home Assistant
 
-Custom Integration für [Home Assistant](https://www.home-assistant.io/), die die Ortsdosisleistung (Gamma-Umgebungsstrahlung) aus dem ODL-Messnetz des [Bundesamts für Strahlenschutz](https://odlinfo.bfs.de/) ausliest. Das Messnetz umfasst rund 1.700 Sonden in ganz Deutschland. Die Daten sind frei und ohne API-Schlüssel verfügbar.
+Custom Integration für [Home Assistant](https://www.home-assistant.io/) mit zwei freien Datenquellen ohne API-Schlüssel:
+
+- **Strahlung:** Ortsdosisleistung (Gamma-Umgebungsstrahlung) aus dem ODL-Messnetz des [Bundesamts für Strahlenschutz](https://odlinfo.bfs.de/) mit rund 1.700 Sonden in ganz Deutschland.
+- **Stromnetz:** Netzampel (Ökostrom-Signal), Netzfrequenz sowie Last und Erzeugung in Deutschland von [Energy-Charts](https://www.energy-charts.info/) (Fraunhofer ISE).
+
+Die Domain heißt weiterhin `bfs_odl`. Bestehende Sonden laufen nach dem Update unverändert weiter.
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/spliter90/ha-bfs-odl/actions/workflows/validate.yml/badge.svg)](https://github.com/spliter90/ha-bfs-odl/actions/workflows/validate.yml)
 
-## Funktionen
+## Strahlung (BfS)
 
-- Einrichtung komplett über die Oberfläche, ohne YAML
+- Einrichtung komplett über die Oberfläche, ohne YAML: *Integration hinzufügen → Strahlungsmesssonde (BfS)*
   - **Standort:** die 10 nächsten Sonden zum Home-Assistant-Standort mit Entfernung
   - **Kennung oder Suche:** 9-stellige Kennung (z. B. `064340121`), Ortsname oder Postleitzahl
 - Mehrere Sonden als getrennte Einträge, jede Sonde ist ein eigenes Gerät
@@ -28,7 +33,7 @@ Custom Integration für [Home Assistant](https://www.home-assistant.io/), die di
   - mehr als X % über dem gleitenden 7-Tage-Mittel liegt (Standard 50 %).
 
   Die Attribute zeigen Schwelle, Mittel, Grenze und Auslöser (`threshold`, `mean`).
-- Diagnose-Download unter *Einstellungen → Geräte & Dienste → BfS ODL → ⋮ → Diagnose herunterladen*
+- Diagnose-Download unter *Einstellungen → Geräte & Dienste → Umwelt & Netz → ⋮ → Diagnose herunterladen*
 
 ### So werden die Daten abgerufen
 
@@ -44,6 +49,48 @@ Custom Integration für [Home Assistant](https://www.home-assistant.io/), die di
 
 Die Integration stürzt in keinem dieser Fälle ab; sobald wieder Daten kommen, sind die Entitäten automatisch zurück.
 
+## Stromnetz (Energy-Charts)
+
+Einrichtung: *Integration hinzufügen → Umwelt & Netz → Stromnetz (Energy-Charts)*. Dort gibst du die Postleitzahl ein und schaltest Netzampel, Frequenz und Erzeugung einzeln ein oder aus. Home Assistant speichert selbst keine Postleitzahl; vorgeschlagen wird deshalb die PLZ der BfS-Sonde, die deinem Standort am nächsten liegt. Alles landet auf einem Gerät **Stromnetz Deutschland (Energy-Charts)**. Das Stromnetz lässt sich einmal einrichten.
+
+### Netzampel
+
+| Entität | Beschreibung |
+|---|---|
+| Netzampel | Grün, Gelb, Rot oder Rot (Netzengpass) für die aktuelle Viertelstunde. Attribut `forecast` mit der Prognose der nächsten 24 h (Beginn, Ende, Anteil, Signal) |
+| Ökostromanteil | Anteil Erneuerbarer laut Ampel für die aktuelle Viertelstunde in % |
+| Nächstes grünes Zeitfenster | Beginn des nächsten zusammenhängenden grünen Zeitraums (Timestamp), Attribute `end` und `duration_minutes`. Ist es gerade grün, steht hier der Beginn des laufenden Zeitraums |
+| Gute Zeit für Stromverbrauch | Binärsensor, an bei grüner Ampel |
+
+Bedeutung der Signalwerte laut Energy-Charts: `2` = Grün (hoher Anteil Erneuerbarer), `1` = Gelb (durchschnittlich), `0` = Rot (geringer Anteil), `-1` = Rot wegen Netzengpass. Das aktuelle Zeitfenster wird über die Uhrzeit bestimmt, nicht über den letzten Listeneintrag; zum Wechsel jeder Viertelstunde rechnet die Integration die Zustände neu, ohne die API erneut abzufragen. Laut Energy-Charts-Doku wertet der Dienst die Postleitzahl derzeit noch nicht regional aus; sie wird trotzdem mitgeschickt.
+
+### Netzfrequenz
+
+| Entität | Beschreibung |
+|---|---|
+| Netzfrequenz | Letzter Sekundenwert in Hz, 3 Nachkommastellen |
+| Frequenzabweichung | Abweichung von 50 Hz in mHz |
+| Frequenz Minimum (1 h) / Frequenz Maximum (1 h) | Extremwerte der letzten Stunde |
+| Netzfrequenz auffällig | Binärsensor, an bei mehr als ±100 mHz Abweichung (einstellbar) |
+
+Gemessen wird die Frequenz vom Fraunhofer ISE in Freiburg. Die API-Doku nennt nur diese eine Messstelle für das europäische Verbundnetz, daher gibt es keine Regionsauswahl. Abgefragt wird jede Minute, und zwar nur die Sekundenwerte seit dem letzten Abruf; die letzte Stunde hält die Integration im Speicher. Ist der neueste Wert älter als 15 Minuten, werden die Frequenz-Entitäten „nicht verfügbar“.
+
+### Last und Erzeugung
+
+Sensoren in GW: Netzlast, Residuallast, Wind an Land, Wind auf See, Solar, Biomasse, Wasserkraft (Laufwasser und Speicher, ohne Pumpspeicher), Braunkohle, Steinkohle, Erdgas, Import-Export-Saldo sowie **Anteil Erneuerbare an der Last** in %.
+
+- Quelle ist `/total_power` (inklusive Eigenversorgung der Industrie). Liefert der Endpunkt nichts Brauchbares, nutzt die Integration `/public_power` (öffentliches Netz) und merkt sich das.
+- Die neuesten Viertelstunden sind bei Energy-Charts oft noch leer. Jeder Sensor zeigt deshalb den letzten vorhandenen Wert; das Attribut `data_time` sagt, für welche Viertelstunde er gilt. `production_types` nennt die verwendeten Energy-Charts-Reihen.
+- Den Anteil Erneuerbarer an der Last übernimmt die Integration direkt, wenn Energy-Charts ihn mitliefert. Sonst berechnet sie ihn aus Wind, Solar, Biomasse, Wasserkraft und Geothermie geteilt durch die Last.
+- Das Vorzeichen des Import-Export-Saldos übernimmt die Integration unverändert von Energy-Charts. Gleiche es einmal mit dem Diagramm auf energy-charts.info ab, bevor du Automationen darauf baust.
+
+Alle Messwerte haben `state_class: measurement` und landen in den Langzeitstatistiken. Frequenz und Leistungen haben die Geräteklassen `frequency` bzw. `power`. Prozentwerte und die Abweichung in mHz haben keine Geräteklasse, weil Home Assistant dafür keine passende anbietet (`power_factor` wäre fachlich falsch, `frequency` kennt kein mHz).
+
+### Wann sind Stromnetz-Entitäten „nicht verfügbar“?
+
+- Energy-Charts ist nicht erreichbar oder liefert Fehler. Betroffen sind nur die Entitäten des jeweiligen Endpunkts; die anderen laufen weiter.
+- Für eine Größe gibt es in den letzten 24 Stunden keinen Wert, oder die Frequenz ist älter als 15 Minuten.
+
 ## Installation über HACS (benutzerdefiniertes Repository)
 
 Voraussetzung: [HACS](https://hacs.xyz/docs/use/) ist installiert, Home Assistant ab Version 2025.8.
@@ -51,12 +98,16 @@ Voraussetzung: [HACS](https://hacs.xyz/docs/use/) ist installiert, Home Assistan
 1. In Home Assistant **HACS** öffnen.
 2. Oben rechts auf **⋮ → Benutzerdefinierte Repositories** klicken.
 3. Als Repository `https://github.com/spliter90/ha-bfs-odl` eintragen, als Typ **Integration** wählen und **Hinzufügen** klicken.
-4. In HACS nach **BfS Ortsdosisleistung (ODL)** suchen, öffnen und **Herunterladen** klicken.
+4. In HACS nach **Umwelt & Netz (BfS / Energy-Charts)** suchen, öffnen und **Herunterladen** klicken.
 5. Home Assistant neu starten (*Einstellungen → System → ⏻ → Home Assistant neu starten*).
-6. *Einstellungen → Geräte & Dienste → Integration hinzufügen → BfS Ortsdosisleistung (ODL)*.
-7. **Nächste Sonden zum Home-Assistant-Standort** oder **Kennung eingeben oder nach Namen suchen** wählen und die Sonde auswählen.
+6. *Einstellungen → Geräte & Dienste → Integration hinzufügen → Umwelt & Netz (BfS / Energy-Charts)*.
+7. **Strahlungsmesssonde (BfS)** oder **Stromnetz (Energy-Charts)** wählen und den Schritten folgen.
 
 Für weitere Sonden Schritt 6 und 7 wiederholen.
+
+### Update von Version 1.0
+
+Die Domain, die Einträge, die eindeutigen IDs und die Entitäts-IDs der Sonden bleiben gleich; eine Migration ist nicht nötig. Nach dem Update über HACS und einem Neustart heißt die Integration in der Oberfläche „Umwelt & Netz (BfS / Energy-Charts)“. Das Stromnetz fügst du als zusätzlichen Eintrag hinzu.
 
 ### Manuelle Installation
 
@@ -64,7 +115,9 @@ Den Ordner `custom_components/bfs_odl` nach `config/custom_components/bfs_odl` k
 
 ## Optionen
 
-*Einstellungen → Geräte & Dienste → BfS ODL → Konfigurieren*
+*Einstellungen → Geräte & Dienste → Umwelt & Netz → beim Eintrag auf das Zahnrad tippen*
+
+**Strahlungsmesssonde**
 
 | Option | Standard | Bereich |
 |---|---|---|
@@ -72,9 +125,22 @@ Den Ordner `custom_components/bfs_odl` nach `config/custom_components/bfs_odl` k
 | Feste Schwelle | 0,3 µSv/h | 0,01–100 µSv/h |
 | Prozent über dem 7-Tage-Mittel | 50 % | 1–1000 % |
 
-Nach dem Speichern wird der Eintrag automatisch neu geladen.
+**Stromnetz**
 
-## Lovelace-Beispiel
+| Option | Standard | Bereich |
+|---|---|---|
+| Postleitzahl | aus der Einrichtung | 5 Ziffern |
+| Netzampel / Netzfrequenz / Netzlast und Erzeugung | an | an / aus |
+| Abrufintervall Netzampel | 15 min | 5–240 min |
+| Abrufintervall Frequenz | 60 s | 30–3600 s |
+| Abrufintervall Erzeugung | 15 min | 5–240 min |
+| Grenze Frequenzabweichung | 100 mHz | 10–1000 mHz |
+
+Nach dem Speichern wird der Eintrag automatisch neu geladen. Schaltest du einen Teil ab, verschwinden dessen Entitäten.
+
+## Lovelace-Beispiele
+
+### Strahlung
 
 Die Entitäts-IDs ergeben sich aus dem Namen der Sonde und der Sprache von Home Assistant. Für die Sonde Wehrheim mit deutscher Oberfläche:
 
@@ -129,6 +195,127 @@ cards:
 
 Da der Hauptsensor `latitude` und `longitude` als Attribute hat, erscheint die Sonde auch auf der **Karten-Karte** (`type: map`).
 
+### Stromnetz mit `custom:plotly-graph`
+
+Voraussetzung ist die Karte [Plotly Graph Card](https://github.com/dbuezas/lovelace-plotly-graph-card), installierbar über *HACS → Frontend*. Die Entitäts-IDs gelten für eine deutsche Oberfläche.
+
+```yaml
+type: vertical-stack
+cards:
+  - type: tile
+    entity: sensor.stromnetz_deutschland_energy_charts_netzampel
+    name: Netzampel
+
+  - type: entities
+    entities:
+      - entity: binary_sensor.stromnetz_deutschland_energy_charts_gute_zeit_fur_stromverbrauch
+      - entity: sensor.stromnetz_deutschland_energy_charts_nachstes_grunes_zeitfenster
+        format: relative
+      - entity: sensor.stromnetz_deutschland_energy_charts_okostromanteil
+      - entity: sensor.stromnetz_deutschland_energy_charts_anteil_erneuerbare_an_der_last
+
+  - type: custom:plotly-graph
+    title: Netzfrequenz (letzte 3 Stunden)
+    hours_to_show: 3
+    refresh_interval: 60
+    entities:
+      - entity: sensor.stromnetz_deutschland_energy_charts_netzfrequenz
+        name: Frequenz
+        line:
+          color: "#1e88e5"
+          width: 1.5
+          shape: spline
+    layout:
+      height: 260
+      showlegend: false
+      yaxis:
+        title: Hz
+        range: [49.85, 50.15]
+      shapes:
+        # Sollwert 50 Hz
+        - type: line
+          xref: paper
+          x0: 0
+          x1: 1
+          y0: 50
+          y1: 50
+          line:
+            color: "#e53935"
+            width: 1.5
+            dash: dash
+        # Grenzen ±100 mHz (Standard des Binärsensors)
+        - type: line
+          xref: paper
+          x0: 0
+          x1: 1
+          y0: 49.9
+          y1: 49.9
+          line:
+            color: "#fb8c00"
+            width: 1
+            dash: dot
+        - type: line
+          xref: paper
+          x0: 0
+          x1: 1
+          y0: 50.1
+          y1: 50.1
+          line:
+            color: "#fb8c00"
+            width: 1
+            dash: dot
+
+  - type: custom:plotly-graph
+    title: Erzeugung und Last Deutschland (48 Stunden)
+    hours_to_show: 48
+    refresh_interval: 900
+    entities:
+      - entity: sensor.stromnetz_deutschland_energy_charts_braunkohle
+        name: Braunkohle
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#795548" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_steinkohle
+        name: Steinkohle
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#424242" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_erdgas
+        name: Erdgas
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#ff7043" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_biomasse
+        name: Biomasse
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#43a047" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_wasserkraft
+        name: Wasserkraft
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#1e88e5" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_wind_auf_see
+        name: Wind auf See
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#00838f" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_wind_an_land
+        name: Wind an Land
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#4dd0e1" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_solar
+        name: Solar
+        stackgroup: erzeugung
+        line: { width: 0, shape: hv, color: "#fdd835" }
+      - entity: sensor.stromnetz_deutschland_energy_charts_netzlast
+        name: Netzlast
+        line: { width: 2, shape: hv, color: "#e53935" }
+    layout:
+      height: 340
+      yaxis:
+        title: GW
+        rangemode: tozero
+      legend:
+        orientation: h
+```
+
+Hinweis: Home Assistant speichert die Werte zum Zeitpunkt des Abrufs. Weil Energy-Charts die neuesten Viertelstunden oft erst mit Verzug füllt, ist die Kurve gegenüber `data_time` um diesen Verzug nach rechts verschoben. Der Import-Export-Saldo fehlt im Stapel absichtlich, weil er negativ werden kann.
+
 ## Automatisierungsbeispiel
 
 ```yaml
@@ -157,8 +344,11 @@ python3.13 -m venv .venv
 .venv/bin/pytest
 ```
 
-Die Tests nutzen `pytest-homeassistant-custom-component` mit gemockten BfS-Antworten und prüfen Config-Flow, Optionen, Coordinator, Filter-Fallbacks, Ausfälle und Diagnose.
+Die Tests nutzen `pytest-homeassistant-custom-component` mit gemockten Antworten von BfS und Energy-Charts. Sie prüfen den Menü-Flow, Optionen, alle Coordinators, die Fallbacks, Ausfälle und die Diagnose. Ein eigener Test stellt sicher, dass bestehende Sonden ihre eindeutigen IDs und Entitäts-IDs behalten.
 
-## Datenquelle und Lizenz der Daten
+## Datenquellen und Lizenzen
 
-Daten: Bundesamt für Strahlenschutz (BfS), [ODL-Info](https://odlinfo.bfs.de/), WFS-Dienst `https://www.imis.bfs.de/ogc/opendata/ows`, Es gelten die [Nutzungsbedingungen des BfS](https://odlinfo.bfs.de/ODL/EN/service/data-interface/data-interface_node.html). Diese Integration ist kein offizielles Produkt des BfS.
+- Strahlung: Bundesamt für Strahlenschutz (BfS), [ODL-Info](https://odlinfo.bfs.de/), WFS-Dienst `https://www.imis.bfs.de/ogc/opendata/ows`. Es gelten die [Nutzungsbedingungen des BfS](https://odlinfo.bfs.de/ODL/EN/service/data-interface/data-interface_node.html).
+- Stromnetz: Daten: Energy-Charts, Fraunhofer ISE, [api.energy-charts.info](https://api.energy-charts.info/), Lizenz [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+Diese Integration ist kein offizielles Produkt des BfS oder des Fraunhofer ISE.

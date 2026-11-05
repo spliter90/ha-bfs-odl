@@ -2,11 +2,35 @@
   "config": {
     "step": {
       "user": {
-        "title": "BfS ambient dose rate (ODL)",
+        "title": "Environment & grid (BfS / Energy-Charts)",
+        "description": "Which data source would you like to add?",
+        "menu_options": {
+          "odl": "Radiation measuring probe (BfS)",
+          "grid": "Power grid (Energy-Charts)"
+        }
+      },
+      "odl": {
+        "title": "Radiation measuring probe (BfS)",
         "description": "How would you like to select the measuring probe?",
         "menu_options": {
           "location": "Nearest probes to my Home Assistant location",
           "manual": "Enter probe ID or search by name"
+        }
+      },
+      "grid": {
+        "title": "Power grid (Energy-Charts)",
+        "description": "Data on the German power grid from Energy-Charts (Fraunhofer ISE). The postal code is used for the grid traffic light; the suggestion is the postal code of the BfS probe nearest to your Home Assistant location.",
+        "data": {
+          "postal_code": "Postal code",
+          "enable_signal": "Grid traffic light (green electricity signal)",
+          "enable_frequency": "Grid frequency",
+          "enable_power": "Load and generation"
+        },
+        "data_description": {
+          "postal_code": "5-digit German postal code, e.g. 61273.",
+          "enable_signal": "Renewable share and traffic light per quarter hour, forecast and next green window.",
+          "enable_frequency": "Frequency measured by Fraunhofer ISE in Freiburg (Continental Europe grid).",
+          "enable_power": "Load, residual load and generation by source for Germany."
         }
       },
       "location": {
@@ -35,12 +59,17 @@
       "cannot_connect": "The BfS data service could not be reached. Please try again later.",
       "station_not_found": "No probe with this ID was found.",
       "no_results": "No probe matches your search.",
-      "query_too_short": "Please enter at least 2 characters."
+      "query_too_short": "Please enter at least 2 characters.",
+      "invalid_postal_code": "Please enter a 5-digit postal code.",
+      "nothing_enabled": "Please enable at least one data source.",
+      "cannot_connect_grid": "Energy-Charts could not be reached. Please try again later.",
+      "signal_unavailable": "Energy-Charts returned no traffic light data for this postal code."
     },
     "abort": {
       "already_configured": "This probe is already set up.",
       "cannot_connect": "The BfS data service could not be reached. Please try again later.",
-      "no_stations": "No probes with coordinates were found."
+      "no_stations": "No probes with coordinates were found.",
+      "grid_already_configured": "The power grid is already set up."
     }
   },
   "options": {
@@ -58,7 +87,35 @@
           "threshold": "The binary sensor turns on when the dose rate exceeds this value.",
           "percent_above_mean": "The binary sensor also turns on when the dose rate is this many percent above the rolling 7-day mean."
         }
+      },
+      "grid": {
+        "title": "Power grid options",
+        "description": "Data sources, update intervals and the limit for the \"Grid frequency abnormal\" binary sensor.",
+        "data": {
+          "postal_code": "Postal code",
+          "enable_signal": "Grid traffic light (green electricity signal)",
+          "enable_frequency": "Grid frequency",
+          "enable_power": "Load and generation",
+          "signal_interval": "Traffic light update interval",
+          "frequency_interval": "Frequency update interval",
+          "power_interval": "Generation update interval",
+          "frequency_threshold": "Frequency deviation limit"
+        },
+        "data_description": {
+          "postal_code": "5-digit German postal code, e.g. 61273.",
+          "enable_signal": "Renewable share and traffic light per quarter hour, forecast and next green window.",
+          "enable_frequency": "Frequency measured by Fraunhofer ISE in Freiburg (Continental Europe grid).",
+          "enable_power": "Load, residual load and generation by source for Germany.",
+          "signal_interval": "At least 5 minutes. Values change every quarter hour.",
+          "frequency_interval": "At least 30 seconds. Only new values since the last update are fetched.",
+          "power_interval": "At least 5 minutes. Energy-Charts publishes quarter-hourly values, often with a delay.",
+          "frequency_threshold": "The binary sensor turns on when the frequency deviates from 50 Hz by more than this value."
+        }
       }
+    },
+    "error": {
+      "invalid_postal_code": "Please enter a 5-digit postal code.",
+      "nothing_enabled": "Please enable at least one data source."
     }
   },
   "entity": {
@@ -66,10 +123,18 @@
       "dose_rate": {
         "name": "Ambient dose rate",
         "state_attributes": {
-          "station_name": { "name": "Probe name" },
-          "kenn": { "name": "Probe ID" },
-          "postal_code": { "name": "Postal code" },
-          "height_above_sea": { "name": "Height above sea level" },
+          "station_name": {
+            "name": "Probe name"
+          },
+          "kenn": {
+            "name": "Probe ID"
+          },
+          "postal_code": {
+            "name": "Postal code"
+          },
+          "height_above_sea": {
+            "name": "Height above sea level"
+          },
           "validated": {
             "name": "Validated",
             "state": {
@@ -77,8 +142,12 @@
               "false": "No"
             }
           },
-          "latitude": { "name": "Latitude" },
-          "longitude": { "name": "Longitude" }
+          "latitude": {
+            "name": "Latitude"
+          },
+          "longitude": {
+            "name": "Longitude"
+          }
         }
       },
       "dose_rate_cosmic": {
@@ -100,6 +169,102 @@
           "defective": "Defective",
           "test_operation": "Test operation"
         }
+      },
+      "grid_signal": {
+        "name": "Grid traffic light",
+        "state": {
+          "green": "Green",
+          "yellow": "Yellow",
+          "red": "Red",
+          "grid_congestion": "Red (grid congestion)"
+        },
+        "state_attributes": {
+          "renewable_share": {
+            "name": "Renewable share"
+          },
+          "slot_start": {
+            "name": "Slot start"
+          },
+          "slot_end": {
+            "name": "Slot end"
+          },
+          "substitute": {
+            "name": "Estimated from historic data"
+          },
+          "forecast": {
+            "name": "Forecast"
+          }
+        }
+      },
+      "signal_renewable_share": {
+        "name": "Green electricity share"
+      },
+      "next_green_window": {
+        "name": "Next green window",
+        "state_attributes": {
+          "end": {
+            "name": "End"
+          },
+          "duration_minutes": {
+            "name": "Duration (minutes)"
+          }
+        }
+      },
+      "grid_frequency": {
+        "name": "Grid frequency",
+        "state_attributes": {
+          "measured_at": {
+            "name": "Measured at"
+          },
+          "samples_1h": {
+            "name": "Samples (1 h)"
+          }
+        }
+      },
+      "frequency_deviation": {
+        "name": "Frequency deviation"
+      },
+      "frequency_minimum": {
+        "name": "Frequency minimum (1 h)"
+      },
+      "frequency_maximum": {
+        "name": "Frequency maximum (1 h)"
+      },
+      "power_load": {
+        "name": "Load"
+      },
+      "power_residual_load": {
+        "name": "Residual load"
+      },
+      "power_wind_onshore": {
+        "name": "Wind onshore"
+      },
+      "power_wind_offshore": {
+        "name": "Wind offshore"
+      },
+      "power_solar": {
+        "name": "Solar"
+      },
+      "power_biomass": {
+        "name": "Biomass"
+      },
+      "power_hydro": {
+        "name": "Hydro"
+      },
+      "power_lignite": {
+        "name": "Lignite"
+      },
+      "power_hard_coal": {
+        "name": "Hard coal"
+      },
+      "power_gas": {
+        "name": "Gas"
+      },
+      "power_cross_border": {
+        "name": "Import/export balance"
+      },
+      "renewable_share_load": {
+        "name": "Renewable share of load"
       }
     },
     "binary_sensor": {
@@ -110,11 +275,46 @@
           "off": "Normal"
         },
         "state_attributes": {
-          "threshold": { "name": "Threshold" },
-          "percent_above_mean": { "name": "Percent above mean" },
-          "mean_7d": { "name": "7-day mean" },
-          "mean_limit": { "name": "Limit from mean" },
-          "triggered_by": { "name": "Triggered by" }
+          "threshold": {
+            "name": "Threshold"
+          },
+          "percent_above_mean": {
+            "name": "Percent above mean"
+          },
+          "mean_7d": {
+            "name": "7-day mean"
+          },
+          "mean_limit": {
+            "name": "Limit from mean"
+          },
+          "triggered_by": {
+            "name": "Triggered by"
+          }
+        }
+      },
+      "good_time_for_consumption": {
+        "name": "Good time for electricity use",
+        "state_attributes": {
+          "signal": {
+            "name": "Traffic light"
+          },
+          "renewable_share": {
+            "name": "Renewable share"
+          },
+          "slot_end": {
+            "name": "Slot end"
+          }
+        }
+      },
+      "frequency_abnormal": {
+        "name": "Grid frequency abnormal",
+        "state_attributes": {
+          "threshold_mhz": {
+            "name": "Limit (mHz)"
+          },
+          "deviation_mhz": {
+            "name": "Deviation (mHz)"
+          }
         }
       }
     }
@@ -125,6 +325,9 @@
     },
     "update_failed": {
       "message": "Error fetching BfS data: {error}"
+    },
+    "grid_update_failed": {
+      "message": "Error fetching Energy-Charts data ({source}): {error}"
     }
   }
 }

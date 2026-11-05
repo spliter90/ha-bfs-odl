@@ -2,11 +2,35 @@
   "config": {
     "step": {
       "user": {
-        "title": "BfS Ortsdosisleistung (ODL)",
+        "title": "Umwelt & Netz (BfS / Energy-Charts)",
+        "description": "Welche Datenquelle möchtest du hinzufügen?",
+        "menu_options": {
+          "odl": "Strahlungsmesssonde (BfS)",
+          "grid": "Stromnetz (Energy-Charts)"
+        }
+      },
+      "odl": {
+        "title": "Strahlungsmesssonde (BfS)",
         "description": "Wie möchtest du die Messsonde auswählen?",
         "menu_options": {
           "location": "Nächste Sonden zum Home-Assistant-Standort",
           "manual": "Kennung eingeben oder nach Namen suchen"
+        }
+      },
+      "grid": {
+        "title": "Stromnetz (Energy-Charts)",
+        "description": "Daten zum deutschen Stromnetz von Energy-Charts (Fraunhofer ISE). Die Postleitzahl wird für die Netzampel verwendet; vorgeschlagen wird die PLZ der BfS-Sonde, die deinem Home-Assistant-Standort am nächsten liegt.",
+        "data": {
+          "postal_code": "Postleitzahl",
+          "enable_signal": "Netzampel (Ökostrom-Signal)",
+          "enable_frequency": "Netzfrequenz",
+          "enable_power": "Netzlast und Erzeugung"
+        },
+        "data_description": {
+          "postal_code": "5-stellige Postleitzahl, z. B. 61273.",
+          "enable_signal": "Anteil Erneuerbare und Ampel je Viertelstunde, Prognose und nächstes grünes Zeitfenster.",
+          "enable_frequency": "Frequenz, gemessen vom Fraunhofer ISE in Freiburg (europäisches Verbundnetz).",
+          "enable_power": "Last, Residuallast und Erzeugung nach Energieträgern für Deutschland."
         }
       },
       "location": {
@@ -35,12 +59,17 @@
       "cannot_connect": "Der Datendienst des BfS ist nicht erreichbar. Bitte später erneut versuchen.",
       "station_not_found": "Es wurde keine Sonde mit dieser Kennung gefunden.",
       "no_results": "Keine Sonde passt zu deiner Suche.",
-      "query_too_short": "Bitte mindestens 2 Zeichen eingeben."
+      "query_too_short": "Bitte mindestens 2 Zeichen eingeben.",
+      "invalid_postal_code": "Bitte eine 5-stellige Postleitzahl eingeben.",
+      "nothing_enabled": "Bitte mindestens eine Datenquelle einschalten.",
+      "cannot_connect_grid": "Energy-Charts ist nicht erreichbar. Bitte später erneut versuchen.",
+      "signal_unavailable": "Energy-Charts liefert für diese Postleitzahl keine Netzampel."
     },
     "abort": {
       "already_configured": "Diese Sonde ist bereits eingerichtet.",
       "cannot_connect": "Der Datendienst des BfS ist nicht erreichbar. Bitte später erneut versuchen.",
-      "no_stations": "Es wurden keine Sonden mit Koordinaten gefunden."
+      "no_stations": "Es wurden keine Sonden mit Koordinaten gefunden.",
+      "grid_already_configured": "Das Stromnetz ist bereits eingerichtet."
     }
   },
   "options": {
@@ -58,7 +87,35 @@
           "threshold": "Der Binärsensor schaltet ein, wenn die Ortsdosisleistung diesen Wert übersteigt.",
           "percent_above_mean": "Der Binärsensor schaltet auch ein, wenn die Ortsdosisleistung um so viel Prozent über dem gleitenden 7-Tage-Mittel liegt."
         }
+      },
+      "grid": {
+        "title": "Optionen Stromnetz",
+        "description": "Datenquellen, Abrufintervalle und Grenze für den Binärsensor „Netzfrequenz auffällig“.",
+        "data": {
+          "postal_code": "Postleitzahl",
+          "enable_signal": "Netzampel (Ökostrom-Signal)",
+          "enable_frequency": "Netzfrequenz",
+          "enable_power": "Netzlast und Erzeugung",
+          "signal_interval": "Abrufintervall Netzampel",
+          "frequency_interval": "Abrufintervall Frequenz",
+          "power_interval": "Abrufintervall Erzeugung",
+          "frequency_threshold": "Grenze Frequenzabweichung"
+        },
+        "data_description": {
+          "postal_code": "5-stellige Postleitzahl, z. B. 61273.",
+          "enable_signal": "Anteil Erneuerbare und Ampel je Viertelstunde, Prognose und nächstes grünes Zeitfenster.",
+          "enable_frequency": "Frequenz, gemessen vom Fraunhofer ISE in Freiburg (europäisches Verbundnetz).",
+          "enable_power": "Last, Residuallast und Erzeugung nach Energieträgern für Deutschland.",
+          "signal_interval": "Mindestens 5 Minuten. Die Werte wechseln jede Viertelstunde.",
+          "frequency_interval": "Mindestens 30 Sekunden. Es werden nur die neuen Werte seit dem letzten Abruf geladen.",
+          "power_interval": "Mindestens 5 Minuten. Energy-Charts veröffentlicht Viertelstundenwerte, oft mit Verzug.",
+          "frequency_threshold": "Der Binärsensor schaltet ein, wenn die Frequenz um mehr als diesen Wert von 50 Hz abweicht."
+        }
       }
+    },
+    "error": {
+      "invalid_postal_code": "Bitte eine 5-stellige Postleitzahl eingeben.",
+      "nothing_enabled": "Bitte mindestens eine Datenquelle einschalten."
     }
   },
   "entity": {
@@ -66,10 +123,18 @@
       "dose_rate": {
         "name": "Ortsdosisleistung",
         "state_attributes": {
-          "station_name": { "name": "Name der Sonde" },
-          "kenn": { "name": "Kennung" },
-          "postal_code": { "name": "Postleitzahl" },
-          "height_above_sea": { "name": "Höhe über NN" },
+          "station_name": {
+            "name": "Name der Sonde"
+          },
+          "kenn": {
+            "name": "Kennung"
+          },
+          "postal_code": {
+            "name": "Postleitzahl"
+          },
+          "height_above_sea": {
+            "name": "Höhe über NN"
+          },
           "validated": {
             "name": "Validiert",
             "state": {
@@ -77,8 +142,12 @@
               "false": "Nein"
             }
           },
-          "latitude": { "name": "Breitengrad" },
-          "longitude": { "name": "Längengrad" }
+          "latitude": {
+            "name": "Breitengrad"
+          },
+          "longitude": {
+            "name": "Längengrad"
+          }
         }
       },
       "dose_rate_cosmic": {
@@ -100,6 +169,102 @@
           "defective": "Defekt",
           "test_operation": "Testbetrieb"
         }
+      },
+      "grid_signal": {
+        "name": "Netzampel",
+        "state": {
+          "green": "Grün",
+          "yellow": "Gelb",
+          "red": "Rot",
+          "grid_congestion": "Rot (Netzengpass)"
+        },
+        "state_attributes": {
+          "renewable_share": {
+            "name": "Anteil Erneuerbare"
+          },
+          "slot_start": {
+            "name": "Beginn Zeitfenster"
+          },
+          "slot_end": {
+            "name": "Ende Zeitfenster"
+          },
+          "substitute": {
+            "name": "Aus historischen Daten geschätzt"
+          },
+          "forecast": {
+            "name": "Prognose"
+          }
+        }
+      },
+      "signal_renewable_share": {
+        "name": "Ökostromanteil"
+      },
+      "next_green_window": {
+        "name": "Nächstes grünes Zeitfenster",
+        "state_attributes": {
+          "end": {
+            "name": "Ende"
+          },
+          "duration_minutes": {
+            "name": "Dauer (Minuten)"
+          }
+        }
+      },
+      "grid_frequency": {
+        "name": "Netzfrequenz",
+        "state_attributes": {
+          "measured_at": {
+            "name": "Gemessen um"
+          },
+          "samples_1h": {
+            "name": "Messwerte (1 h)"
+          }
+        }
+      },
+      "frequency_deviation": {
+        "name": "Frequenzabweichung"
+      },
+      "frequency_minimum": {
+        "name": "Frequenz Minimum (1 h)"
+      },
+      "frequency_maximum": {
+        "name": "Frequenz Maximum (1 h)"
+      },
+      "power_load": {
+        "name": "Netzlast"
+      },
+      "power_residual_load": {
+        "name": "Residuallast"
+      },
+      "power_wind_onshore": {
+        "name": "Wind an Land"
+      },
+      "power_wind_offshore": {
+        "name": "Wind auf See"
+      },
+      "power_solar": {
+        "name": "Solar"
+      },
+      "power_biomass": {
+        "name": "Biomasse"
+      },
+      "power_hydro": {
+        "name": "Wasserkraft"
+      },
+      "power_lignite": {
+        "name": "Braunkohle"
+      },
+      "power_hard_coal": {
+        "name": "Steinkohle"
+      },
+      "power_gas": {
+        "name": "Erdgas"
+      },
+      "power_cross_border": {
+        "name": "Import-Export-Saldo"
+      },
+      "renewable_share_load": {
+        "name": "Anteil Erneuerbare an der Last"
       }
     },
     "binary_sensor": {
@@ -110,11 +275,46 @@
           "off": "Normal"
         },
         "state_attributes": {
-          "threshold": { "name": "Schwelle" },
-          "percent_above_mean": { "name": "Prozent über Mittel" },
-          "mean_7d": { "name": "7-Tage-Mittel" },
-          "mean_limit": { "name": "Grenze aus Mittel" },
-          "triggered_by": { "name": "Ausgelöst durch" }
+          "threshold": {
+            "name": "Schwelle"
+          },
+          "percent_above_mean": {
+            "name": "Prozent über Mittel"
+          },
+          "mean_7d": {
+            "name": "7-Tage-Mittel"
+          },
+          "mean_limit": {
+            "name": "Grenze aus Mittel"
+          },
+          "triggered_by": {
+            "name": "Ausgelöst durch"
+          }
+        }
+      },
+      "good_time_for_consumption": {
+        "name": "Gute Zeit für Stromverbrauch",
+        "state_attributes": {
+          "signal": {
+            "name": "Netzampel"
+          },
+          "renewable_share": {
+            "name": "Anteil Erneuerbare"
+          },
+          "slot_end": {
+            "name": "Ende Zeitfenster"
+          }
+        }
+      },
+      "frequency_abnormal": {
+        "name": "Netzfrequenz auffällig",
+        "state_attributes": {
+          "threshold_mhz": {
+            "name": "Grenze (mHz)"
+          },
+          "deviation_mhz": {
+            "name": "Abweichung (mHz)"
+          }
         }
       }
     }
@@ -125,6 +325,9 @@
     },
     "update_failed": {
       "message": "Fehler beim Abruf der BfS-Daten: {error}"
+    },
+    "grid_update_failed": {
+      "message": "Fehler beim Abruf der Energy-Charts-Daten ({source}): {error}"
     }
   }
 }

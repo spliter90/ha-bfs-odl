@@ -1,0 +1,28 @@
+name: ZIP entpacken
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Entpacken
+        run: |
+          unzip -o ha-bfs-odl.zip -d /tmp/zip
+          rm -rf /tmp/zip/ha-bfs-odl/.github
+          cp -r /tmp/zip/ha-bfs-odl/. .
+          git rm -q ha-bfs-odl.zip
+          sed -i "s/DEIN-GITHUB-NAME/${{ github.repository_owner }}/g" custom_components/bfs_odl/manifest.json README.md
+
+      - name: Committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "ZIP entpackt"
+          git push

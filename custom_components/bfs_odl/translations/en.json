@@ -1,0 +1,130 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BfS ambient dose rate (ODL)",
+        "description": "How would you like to select the measuring probe?",
+        "menu_options": {
+          "location": "Nearest probes to my Home Assistant location",
+          "manual": "Enter probe ID or search by name"
+        }
+      },
+      "location": {
+        "title": "Nearest probes",
+        "description": "The 10 probes closest to your Home Assistant location ({latitude}, {longitude}) with their distance.",
+        "data": {
+          "kenn": "Probe"
+        }
+      },
+      "manual": {
+        "title": "Probe ID or name",
+        "description": "Enter the 9-digit probe ID (e.g. 064340121) or part of the name or postal code (e.g. Wehrheim).",
+        "data": {
+          "query": "ID, name or postal code"
+        }
+      },
+      "select": {
+        "title": "Select probe",
+        "description": "{count} probes match your search.",
+        "data": {
+          "kenn": "Probe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "The BfS data service could not be reached. Please try again later.",
+      "station_not_found": "No probe with this ID was found.",
+      "no_results": "No probe matches your search.",
+      "query_too_short": "Please enter at least 2 characters."
+    },
+    "abort": {
+      "already_configured": "This probe is already set up.",
+      "cannot_connect": "The BfS data service could not be reached. Please try again later.",
+      "no_stations": "No probes with coordinates were found."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "description": "Update interval and limits for the \"Elevated radiation\" binary sensor.",
+        "data": {
+          "scan_interval": "Update interval",
+          "threshold": "Fixed threshold",
+          "percent_above_mean": "Percent above the 7-day mean"
+        },
+        "data_description": {
+          "scan_interval": "At least 10 minutes. BfS publishes new hourly values once per hour.",
+          "threshold": "The binary sensor turns on when the dose rate exceeds this value.",
+          "percent_above_mean": "The binary sensor also turns on when the dose rate is this many percent above the rolling 7-day mean."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "dose_rate": {
+        "name": "Ambient dose rate",
+        "state_attributes": {
+          "station_name": { "name": "Probe name" },
+          "kenn": { "name": "Probe ID" },
+          "postal_code": { "name": "Postal code" },
+          "height_above_sea": { "name": "Height above sea level" },
+          "validated": {
+            "name": "Validated",
+            "state": {
+              "true": "Yes",
+              "false": "No"
+            }
+          },
+          "latitude": { "name": "Latitude" },
+          "longitude": { "name": "Longitude" }
+        }
+      },
+      "dose_rate_cosmic": {
+        "name": "Cosmic component"
+      },
+      "dose_rate_terrestrial": {
+        "name": "Terrestrial component"
+      },
+      "dose_rate_mean_7d": {
+        "name": "7-day mean"
+      },
+      "measurement_time": {
+        "name": "Measurement time"
+      },
+      "status": {
+        "name": "Probe status",
+        "state": {
+          "in_operation": "In operation",
+          "defective": "Defective",
+          "test_operation": "Test operation"
+        }
+      }
+    },
+    "binary_sensor": {
+      "elevated_radiation": {
+        "name": "Elevated radiation",
+        "state": {
+          "on": "Elevated",
+          "off": "Normal"
+        },
+        "state_attributes": {
+          "threshold": { "name": "Threshold" },
+          "percent_above_mean": { "name": "Percent above mean" },
+          "mean_7d": { "name": "7-day mean" },
+          "mean_limit": { "name": "Limit from mean" },
+          "triggered_by": { "name": "Triggered by" }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "station_not_found": {
+      "message": "Probe {kenn} is no longer in the BfS dataset."
+    },
+    "update_failed": {
+      "message": "Error fetching BfS data: {error}"
+    }
+  }
+}

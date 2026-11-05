@@ -1,0 +1,130 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BfS Ortsdosisleistung (ODL)",
+        "description": "Wie möchtest du die Messsonde auswählen?",
+        "menu_options": {
+          "location": "Nächste Sonden zum Home-Assistant-Standort",
+          "manual": "Kennung eingeben oder nach Namen suchen"
+        }
+      },
+      "location": {
+        "title": "Nächste Sonden",
+        "description": "Die 10 Sonden, die deinem Home-Assistant-Standort ({latitude}, {longitude}) am nächsten liegen, mit Entfernung.",
+        "data": {
+          "kenn": "Sonde"
+        }
+      },
+      "manual": {
+        "title": "Kennung oder Name",
+        "description": "Gib die 9-stellige Kennung (z. B. 064340121) oder einen Teil des Namens bzw. der Postleitzahl ein (z. B. Wehrheim).",
+        "data": {
+          "query": "Kennung, Name oder PLZ"
+        }
+      },
+      "select": {
+        "title": "Sonde auswählen",
+        "description": "{count} Sonden passen zu deiner Suche.",
+        "data": {
+          "kenn": "Sonde"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Der Datendienst des BfS ist nicht erreichbar. Bitte später erneut versuchen.",
+      "station_not_found": "Es wurde keine Sonde mit dieser Kennung gefunden.",
+      "no_results": "Keine Sonde passt zu deiner Suche.",
+      "query_too_short": "Bitte mindestens 2 Zeichen eingeben."
+    },
+    "abort": {
+      "already_configured": "Diese Sonde ist bereits eingerichtet.",
+      "cannot_connect": "Der Datendienst des BfS ist nicht erreichbar. Bitte später erneut versuchen.",
+      "no_stations": "Es wurden keine Sonden mit Koordinaten gefunden."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen",
+        "description": "Abrufintervall und Grenzen für den Binärsensor „Erhöhte Strahlung“.",
+        "data": {
+          "scan_interval": "Abrufintervall",
+          "threshold": "Feste Schwelle",
+          "percent_above_mean": "Prozent über dem 7-Tage-Mittel"
+        },
+        "data_description": {
+          "scan_interval": "Mindestens 10 Minuten. Das BfS veröffentlicht neue Stundenwerte einmal pro Stunde.",
+          "threshold": "Der Binärsensor schaltet ein, wenn die Ortsdosisleistung diesen Wert übersteigt.",
+          "percent_above_mean": "Der Binärsensor schaltet auch ein, wenn die Ortsdosisleistung um so viel Prozent über dem gleitenden 7-Tage-Mittel liegt."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "dose_rate": {
+        "name": "Ortsdosisleistung",
+        "state_attributes": {
+          "station_name": { "name": "Name der Sonde" },
+          "kenn": { "name": "Kennung" },
+          "postal_code": { "name": "Postleitzahl" },
+          "height_above_sea": { "name": "Höhe über NN" },
+          "validated": {
+            "name": "Validiert",
+            "state": {
+              "true": "Ja",
+              "false": "Nein"
+            }
+          },
+          "latitude": { "name": "Breitengrad" },
+          "longitude": { "name": "Längengrad" }
+        }
+      },
+      "dose_rate_cosmic": {
+        "name": "Kosmischer Anteil"
+      },
+      "dose_rate_terrestrial": {
+        "name": "Terrestrischer Anteil"
+      },
+      "dose_rate_mean_7d": {
+        "name": "7-Tage-Mittel"
+      },
+      "measurement_time": {
+        "name": "Zeitpunkt der Messung"
+      },
+      "status": {
+        "name": "Status der Sonde",
+        "state": {
+          "in_operation": "In Betrieb",
+          "defective": "Defekt",
+          "test_operation": "Testbetrieb"
+        }
+      }
+    },
+    "binary_sensor": {
+      "elevated_radiation": {
+        "name": "Erhöhte Strahlung",
+        "state": {
+          "on": "Erhöht",
+          "off": "Normal"
+        },
+        "state_attributes": {
+          "threshold": { "name": "Schwelle" },
+          "percent_above_mean": { "name": "Prozent über Mittel" },
+          "mean_7d": { "name": "7-Tage-Mittel" },
+          "mean_limit": { "name": "Grenze aus Mittel" },
+          "triggered_by": { "name": "Ausgelöst durch" }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "station_not_found": {
+      "message": "Die Sonde {kenn} ist nicht mehr im Datensatz des BfS enthalten."
+    },
+    "update_failed": {
+      "message": "Fehler beim Abruf der BfS-Daten: {error}"
+    }
+  }
+}

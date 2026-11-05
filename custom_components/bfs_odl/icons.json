@@ -1,0 +1,28 @@
+{
+  "entity": {
+    "sensor": {
+      "dose_rate": { "default": "mdi:radioactive" },
+      "dose_rate_cosmic": { "default": "mdi:weather-night" },
+      "dose_rate_terrestrial": { "default": "mdi:terrain" },
+      "dose_rate_mean_7d": { "default": "mdi:chart-bell-curve-cumulative" },
+      "measurement_time": { "default": "mdi:clock-outline" },
+      "status": {
+        "default": "mdi:access-point",
+        "state": {
+          "in_operation": "mdi:access-point-check",
+          "defective": "mdi:access-point-off",
+          "test_operation": "mdi:access-point-network"
+        }
+      }
+    },
+    "binary_sensor": {
+      "elevated_radiation": {
+        "default": "mdi:radioactive",
+        "state": {
+          "on": "mdi:radioactive-circle",
+          "off": "mdi:radioactive-off"
+        }
+      }
+    }
+  }
+}

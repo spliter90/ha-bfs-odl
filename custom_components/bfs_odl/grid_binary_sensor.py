@@ -87,9 +87,12 @@ class FrequencyAbnormalSensor(GridEntity[FrequencyCoordinator], BinarySensorEnti
         return data is not None and not self.coordinator.is_stale(data)
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Abweichung größer als die Schwelle?"""
-        return abs(self.coordinator.data.deviation_mhz) > self._threshold
+        data = self.coordinator.data
+        if data is None:
+            return None
+        return abs(data.deviation_mhz) > self._threshold
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -97,6 +100,6 @@ class FrequencyAbnormalSensor(GridEntity[FrequencyCoordinator], BinarySensorEnti
         data = self.coordinator.data
         return {
             "threshold_mhz": self._threshold,
-            "deviation_mhz": round(data.deviation_mhz, 1),
-            "measured_at": data.time.isoformat(),
+            "deviation_mhz": round(data.deviation_mhz, 1) if data else None,
+            "measured_at": data.time.isoformat() if data else None,
         }

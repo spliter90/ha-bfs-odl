@@ -16,12 +16,24 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 )
 
 from custom_components.bfs_odl.const import (
+    CONF_ENABLE_FREQUENCY,
+    CONF_ENABLE_POWER,
+    CONF_ENABLE_SIGNAL,
+    CONF_ENTRY_TYPE,
+    CONF_FREQUENCY_INTERVAL,
+    CONF_FREQUENCY_STALE_AFTER,
+    CONF_FREQUENCY_THRESHOLD,
     CONF_KENN,
     CONF_PERCENT_ABOVE_MEAN,
+    CONF_POSTAL_CODE,
+    CONF_POWER_INTERVAL,
     CONF_SCAN_INTERVAL,
+    CONF_SIGNAL_INTERVAL,
     CONF_STATION_NAME,
     CONF_THRESHOLD,
     DOMAIN,
+    ENTRY_TYPE_GRID,
+    GRID_UNIQUE_ID,
     LAYER_LATEST,
     LAYER_TIMESERIES,
     WFS_URL,
@@ -227,3 +239,25 @@ def mock_setup_entry() -> Generator[None]:
     """Verhindert das echte Setup nach dem Config-Flow."""
     with patch("custom_components.bfs_odl.async_setup_entry", return_value=True):
         yield
+
+
+@pytest.fixture
+def grid_entry() -> MockConfigEntry:
+    """Ein Stromnetz-Eintrag mit allen drei Endpunkten."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Stromnetz Deutschland",
+        unique_id=GRID_UNIQUE_ID,
+        data={CONF_ENTRY_TYPE: ENTRY_TYPE_GRID, CONF_POSTAL_CODE: "61273"},
+        options={
+            CONF_POSTAL_CODE: "61273",
+            CONF_ENABLE_SIGNAL: True,
+            CONF_ENABLE_FREQUENCY: True,
+            CONF_ENABLE_POWER: True,
+            CONF_SIGNAL_INTERVAL: 15,
+            CONF_FREQUENCY_INTERVAL: 60,
+            CONF_POWER_INTERVAL: 15,
+            CONF_FREQUENCY_THRESHOLD: 100,
+            CONF_FREQUENCY_STALE_AFTER: 180,
+        },
+    )

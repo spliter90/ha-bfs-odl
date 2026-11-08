@@ -6,11 +6,14 @@ Ein Eintrag ist entweder eine ODL-Messsonde des BfS (bestehende Einträge, ohne
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_change
 
 from .const import (
@@ -19,8 +22,10 @@ from .const import (
     CONF_ENABLE_SIGNAL,
     CONF_ENTRY_TYPE,
     CONF_KENN,
+    DOMAIN,
     ENTRY_TYPE_GRID,
     ENTRY_TYPE_ODL,
+    ISSUE_FREQUENCY_MISSING,
 )
 from .coordinator import (
     BfsOdlConfigEntry,
@@ -34,8 +39,11 @@ from .grid_coordinator import (
     PowerCoordinator,
     SignalCoordinator,
     async_get_energy_charts_api,
+    frequency_store,
 )
 from .grid_entity import entity_source
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
@@ -67,10 +75,44 @@ async def _async_setup_grid(hass: HomeAssistant, entry: BfsOdlConfigEntry) -> No
     if entry.options.get(CONF_ENABLE_POWER, True):
         data.power = PowerCoordinator(hass, entry, api)
 
+    # Jede Quelle für sich: Fällt eine aus, blockiert sie den Eintrag nicht. Ihre
+    # Entitäten bleiben nicht verfügbar; der Coordinator versucht es im normalen
+    # Intervall erneut, sobald die Entitäten angemeldet sind.
+    failed: dict[str, str] = {}
     for coordinator in data.coordinators:
-        await coordinator.async_config_entry_first_refresh()
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except ConfigEntryNotReady as err:
+            failed[coordinator.source] = coordinator.last_error or repr(err.__cause__)
+            continue
+        if not coordinator.has_data:
+            failed[coordinator.source] = coordinator.last_error or "keine Daten"
+
+    if len(failed) == len(data.coordinators):
+        # Alle aktivierten Quellen gescheitert: später erneut versuchen
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="grid_not_ready",
+            translation_placeholders={
+                "errors": "; ".join(f"{src}: {err}" for src, err in failed.items())
+            },
+        )
+    for source, error in failed.items():
+        # Die Frequenz meldet ihren Ausfall selbst (einmal pro Ausfall)
+        if source != "frequency":
+            _LOGGER.warning(
+                "Stromnetz: Datenquelle „%s“ beim Start nicht verfügbar (%s). Ihre "
+                "Entitäten bleiben nicht verfügbar, bis ein späterer Abruf klappt; "
+                "die übrigen Quellen laufen normal",
+                source,
+                error,
+            )
+
     entry.runtime_data = data
     _async_remove_disabled_entities(hass, entry, data)
+    if data.frequency is None:
+        # Frequenz abgeschaltet: ein offenes Repair-Issue ist gegenstandslos
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_FREQUENCY_MISSING)
 
     if (signal := data.signal) is not None:
         # Die Ampel gilt je Viertelstunde: Zustände zum Wechsel neu berechnen,
@@ -105,6 +147,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: BfsOdlConfigEntry) -> b
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: BfsOdlConfigEntry) -> None:
-    """Löscht den gespeicherten ODL-Verlauf, wenn eine Sonde entfernt wird."""
+    """Löscht gespeicherte Daten, wenn ein Eintrag entfernt wird."""
     if entry_type(entry) == ENTRY_TYPE_ODL:
         await history_store(hass, entry.data[CONF_KENN]).async_remove()
+        return
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_FREQUENCY_MISSING)
+    await frequency_store(hass).async_remove()

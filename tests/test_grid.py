@@ -206,28 +206,6 @@ def calls_to(aioclient_mock: AiohttpClientMocker, url: str) -> list[Any]:
     ]
 
 
-@pytest.fixture
-def grid_entry() -> MockConfigEntry:
-    """Ein Stromnetz-Eintrag mit allen drei Endpunkten."""
-    return MockConfigEntry(
-        domain=DOMAIN,
-        title="Stromnetz Deutschland",
-        unique_id=GRID_UNIQUE_ID,
-        data={CONF_ENTRY_TYPE: ENTRY_TYPE_GRID, CONF_POSTAL_CODE: "61273"},
-        options={
-            CONF_POSTAL_CODE: "61273",
-            CONF_ENABLE_SIGNAL: True,
-            CONF_ENABLE_FREQUENCY: True,
-            CONF_ENABLE_POWER: True,
-            CONF_SIGNAL_INTERVAL: 15,
-            CONF_FREQUENCY_INTERVAL: 60,
-            CONF_POWER_INTERVAL: 15,
-            CONF_FREQUENCY_THRESHOLD: 100,
-            CONF_FREQUENCY_STALE_AFTER: 180,
-        },
-    )
-
-
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     hass.config.language = "de"
     entry.add_to_hass(hass)
@@ -605,7 +583,8 @@ async def test_frequency_older_than_stale_limit(
     freezer.tick(timedelta(hours=2))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
-    assert grid_entry.runtime_data.frequency.last_fetch_error is not None
+    assert grid_entry.runtime_data.frequency.last_error is not None
+    assert grid_entry.runtime_data.frequency.last_update_success
     assert _state(hass, "sensor", "frequency_frequency").state != STATE_UNAVAILABLE
     assert _state(hass, "binary_sensor", "frequency_abnormal").state == STATE_OFF
 

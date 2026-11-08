@@ -383,6 +383,15 @@
     },
     "grid_update_failed": {
       "message": "Error fetching Energy-Charts data ({source}): {error}"
+    },
+    "grid_not_ready": {
+      "message": "No power grid data source delivers data: {errors}"
+    }
+  },
+  "issues": {
+    "frequency_missing": {
+      "title": "Energy-Charts has not delivered grid frequency since {since}",
+      "description": "Energy-Charts (Fraunhofer ISE) has not delivered any grid frequency data since {since} (last measurement: {last_measurement}). The frequency entities are unavailable until data returns; the grid traffic light and generation are not affected.\n\nThis is a problem on the Energy-Charts side and usually resolves itself. This message disappears automatically as soon as frequency data arrives again. If you do not need the frequency, you can switch it off in the options of the power grid entry."
     }
   }
 }

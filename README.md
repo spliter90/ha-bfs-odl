@@ -83,6 +83,17 @@ Gemessen wird die Frequenz vom Fraunhofer ISE in Freiburg. Die API-Doku nennt nu
 - Minimum und Maximum beziehen sich auf die Stunde vor dem neuesten Messwert, nicht auf die Stunde vor „jetzt“.
 - Ein einzelner fehlgeschlagener Abruf macht die Entitäten nicht unavailable. Unavailable werden sie erst, wenn der neueste Messwert älter als die **Stale-Grenze** ist (Standard 3 Stunden, einstellbar von 30 Minuten bis 12 Stunden).
 
+#### Wenn Energy-Charts keine Frequenz liefert
+
+Seit dem 05.11.2026 antwortet `/frequency` für aktuelle Zeiträume zeitweise mit HTTP 404 („no content available“). Ab Version 1.1.2 geht die Integration so damit um:
+
+- Der Stromnetz-Eintrag wird trotzdem eingerichtet. Netzampel und Erzeugung laufen normal; nur die Frequenz-Entitäten sind nicht verfügbar.
+- Fehlen Daten bei einem späteren Abruf, rechnet die Integration mit den vorhandenen weiter, bis diese älter als die Stale-Grenze sind. Danach werden die Frequenz-Entitäten unavailable, „Frequenz Datenalter“ zählt weiter.
+- Der letzte Messwert und der Ausfallzustand werden gespeichert. Nach einem Neustart zeigt das Datenalter deshalb weiter, wie alt die letzten Daten sind.
+- Im Log steht pro Ausfall genau eine Warnung, sobald keine verwertbaren Daten mehr vorliegen, und eine Info, wenn sie zurückkommen.
+- Fehlen die Daten länger als 6 Stunden (frühestens nach der Stale-Grenze), erscheint unter *Einstellungen → System → Reparaturen* die Meldung „Energy-Charts liefert seit … keine Netzfrequenz“. Sie verschwindet von selbst, wenn wieder Daten kommen, oder wenn du die Frequenz in den Optionen abschaltest.
+- Ist beim Start kein früherer Messwert bekannt, gilt als Beginn des Ausfalls der Zeitpunkt, an dem die Integration ihn bemerkt hat.
+
 ### Last und Erzeugung
 
 Sensoren in GW: Netzlast, Residuallast, Wind an Land, Wind auf See, Solar, Biomasse, Wasserkraft (Laufwasser und Speicher, ohne Pumpspeicher), Braunkohle, Steinkohle, Erdgas, Import-Export-Saldo sowie **Anteil Erneuerbare an der Last** in %.
@@ -96,7 +107,7 @@ Alle Messwerte haben `state_class: measurement` und landen in den Langzeitstatis
 
 ### Wann sind Stromnetz-Entitäten „nicht verfügbar“?
 
-- Energy-Charts ist nicht erreichbar oder liefert Fehler. Betroffen sind nur die Entitäten des jeweiligen Endpunkts; die anderen laufen weiter.
+- Energy-Charts ist nicht erreichbar oder liefert Fehler. Betroffen sind nur die Entitäten des jeweiligen Endpunkts; die anderen laufen weiter. Das gilt auch beim Start: Solange mindestens eine Quelle Daten liefert, wird der Eintrag eingerichtet; die ausgefallene Quelle erholt sich im normalen Abrufintervall von selbst. Nur wenn alle eingeschalteten Quellen scheitern, versucht Home Assistant die Einrichtung später erneut.
 - Für eine Größe gibt es in den letzten 24 Stunden keinen Wert.
 - Die Frequenz ist älter als die Stale-Grenze (Standard 3 Stunden). Für die Frequenz-Entitäten zählt nur das Datenalter, nicht einzelne fehlgeschlagene Abrufe.
 
@@ -347,6 +358,15 @@ actions:
 Die Wartezeit von einer Stunde filtert einzelne Ausreißer. Natürliche Schwankungen entstehen vor allem durch Regen: Er wäscht Zerfallsprodukte des natürlichen Edelgases Radon aus der Luft und kann die Ortsdosisleistung für einige Stunden deutlich erhöhen, teils auf das Doppelte. Mit dem Standard von 50 % über dem Mittel schaltet der Binärsensor bei starkem Regen deshalb gelegentlich ein. Wer das nicht möchte, erhöht den Prozentwert (z. B. auf 150 %) und verlässt sich auf die feste Schwelle.
 
 ## Changelog
+
+### 1.1.2
+
+- **Eine ausgefallene Datenquelle blockiert den Stromnetz-Eintrag nicht mehr.** Bisher landete der ganze Eintrag in „Einrichtung wird wiederholt“, wenn beim Start eine Quelle scheiterte, und alle Sensoren waren nicht verfügbar. Jetzt reicht eine funktionierende Quelle; nur wenn alle scheitern, wird die Einrichtung wiederholt.
+- **Netzfrequenz ohne Daten:** HTTP 404 und leere Antworten führen nicht mehr zu einem Abruffehler. Die Werte bleiben bis zur Stale-Grenze gültig, danach sind die Frequenz-Entitäten nicht verfügbar und „Frequenz Datenalter“ zählt weiter, auch über einen Neustart hinweg.
+- **Log:** pro Ausfall eine Warnung und bei der Rückkehr eine Info statt einer Meldung pro Abruf.
+- **Reparaturen:** Fehlen Frequenzdaten länger als 6 Stunden, erscheint ein Hinweis „Energy-Charts liefert seit … keine Netzfrequenz“. Er verschwindet automatisch.
+- **Diagnose:** pro Quelle letzter erfolgreicher Abruf, letzter Fehler mit Zeitpunkt und Zeitpunkt des neuesten Datenpunkts; bei der Frequenz zusätzlich der Ausfallzustand.
+- Domain, eindeutige IDs, Entitäts-IDs und Optionen bleiben unverändert.
 
 ### 1.1.1
 

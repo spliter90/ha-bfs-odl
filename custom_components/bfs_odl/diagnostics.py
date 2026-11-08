@@ -81,6 +81,8 @@ def _coordinator_diagnostics(coordinator: GridCoordinator[Any]) -> dict[str, Any
     else:
         summary = _serialize(asdict(data)) if data is not None else None
     return {
+        # Pro Quelle: letzter erfolgreicher Abruf, letzter Fehler, neuester Datenpunkt
+        **coordinator.status_diagnostics(),
         "last_update_success": coordinator.last_update_success,
         "last_exception": (
             repr(coordinator.last_exception) if coordinator.last_exception else None

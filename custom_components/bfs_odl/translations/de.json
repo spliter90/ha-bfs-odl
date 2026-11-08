@@ -383,6 +383,15 @@
     },
     "grid_update_failed": {
       "message": "Fehler beim Abruf der Energy-Charts-Daten ({source}): {error}"
+    },
+    "grid_not_ready": {
+      "message": "Keine Stromnetz-Datenquelle liefert Daten: {errors}"
+    }
+  },
+  "issues": {
+    "frequency_missing": {
+      "title": "Energy-Charts liefert seit {since} keine Netzfrequenz",
+      "description": "Energy-Charts (Fraunhofer ISE) liefert seit {since} keine Netzfrequenz-Daten (letzter Messwert: {last_measurement}). Die Frequenz-Entitäten sind nicht verfügbar, bis wieder Daten kommen; Netzampel und Erzeugung sind nicht betroffen.\n\nDas Problem liegt bei Energy-Charts und erledigt sich in der Regel von selbst. Diese Meldung verschwindet automatisch, sobald wieder Frequenzdaten kommen. Brauchst du die Frequenz nicht, kannst du sie in den Optionen des Stromnetz-Eintrags abschalten."
     }
   }
 }

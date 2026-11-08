@@ -120,6 +120,12 @@ FREQUENCY_WINDOW: Final = timedelta(hours=1)
 FREQUENCY_BUFFER: Final = timedelta(hours=3)
 # Erster Abruf bzw. nach einem Neustart: mindestens so weit zurück
 FREQUENCY_INITIAL_LOOKBACK: Final = timedelta(hours=3)
+# Fehlen Frequenzdaten länger, wird ein Repair-Issue angelegt
+FREQUENCY_REPAIR_AFTER: Final = timedelta(hours=6)
+ISSUE_FREQUENCY_MISSING: Final = "frequency_missing"
+# Letzter Frequenzwert und Ausfallzustand überleben einen Neustart
+GRID_FREQUENCY_STORAGE_KEY: Final = f"{DOMAIN}.grid_frequency"
+FREQUENCY_STORE_SAVE_DELAY: Final = 300  # Sekunden
 # Erzeugungswerte erscheinen oft mit Verzug; so weit wird zurückgeschaut
 POWER_LOOKBACK: Final = timedelta(hours=24)
 SIGNAL_FORECAST_HOURS: Final = 24
